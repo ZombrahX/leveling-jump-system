@@ -1,34 +1,20 @@
-# Academic & Team Notes / University Materials
-01_Clases_y_Guias_ISIL/
-02_Relevamiento_y_Negocio/
-03_Entregables_e_Informes/
-04_Diagramas_y_Diseno/
-Sprint 1/
-scripts/
-GUIA_Y_REGLAS_ROL_DEVELOPERS.md
-MEMORIA_DEL_PROYECTO.md
-extracted_brian_chat.txt
-
-# Google Drive Cloud Pointers
-*.gdoc
-*.gsheet
-*.gslides
-
-# Dependencies & Build
+# Dependencies
 node_modules/
-dist/
-build/
 .pnp
 .pnp.js
 
 # Environment Variables
 .env
-.env.*
+.env.local
+.env.*.local
 
-# Temporary / OS
-__pycache__/
-*.pyc
-.vscode/
-.idea/
+# Production Build
+dist/
+build/
+
+# Logs & Temporary Files
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 .DS_Store
 Thumbs.db

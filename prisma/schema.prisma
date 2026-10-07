@@ -1,0 +1,110 @@
+// schema.prisma - Leveling Jump Database Schema
+// Sprint 1: HU-03 (Catálogo de Productos) y HU-04 (Lotes e Inventario)
+// Desarrollador Responsable: Cesar Sanchez (Backend & Database Modeling)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ----------------------------------------------------
+// HU-03: GESTIÓN DE PRODUCTOS DEL CATÁLOGO
+// ----------------------------------------------------
+enum EstadoProducto {
+  ACTIVO
+  INACTIVO
+}
+
+enum CategoriaProducto {
+  MODEL_KITS
+  FIGURAS
+  ACCESORIOS
+  HERRAMIENTAS
+  OTROS
+}
+
+enum EscalaProducto {
+  ESCALA_1_144   // HG / RG
+  ESCALA_1_100   // MG / FM
+  ESCALA_1_60    // PG
+  SIN_ESCALA     // Figuras o accesorios
+  NO_APLICA
+}
+
+model Producto {
+  id               Int                @id @default(autoincrement()) @map("id_producto")
+  codigo           String             @unique @map("codigo_sku") @db.VarChar(20) // CP-01: LJ-000123
+  nombre           String             @map("nombre") @db.VarChar(150)           // CP-02: Obligatorio
+  descripcion      String?            @map("descripcion") @db.Text              // CP-03: Opcional
+  categoria        CategoriaProducto  @default(MODEL_KITS) @map("categoria")     // CP-04: Obligatorio
+  serie            String?            @map("serie_franquicia") @db.VarChar(100) // CP-05: Gundam, Zoids, etc.
+  escala           EscalaProducto     @default(NO_APLICA) @map("escala")        // CP-06: 1/144, 1/100, etc.
+  marca            String             @map("marca_fabricante") @db.VarChar(100) // CP-07: Bandai, Kotobukiya
+  precio           Decimal            @map("precio_soles") @db.Decimal(10, 2)   // CP-08: S/ > 0
+  imagenUrl        String             @map("imagen_principal_url") @db.VarChar(500) // CP-09
+  estado           EstadoProducto     @default(ACTIVO) @map("estado_producto")   // CP-10: Activo / Inactivo
+
+  fechaCreacion    DateTime           @default(now()) @map("fecha_creacion")     // CP-12
+  fechaActualizacion DateTime         @updatedAt @map("fecha_actualizacion")     // CP-13
+
+  // Relaciones con HU-04 (Inventario y Unidades Físicas)
+  unidadesInventario InventarioUnidad[]
+
+  @@unique([nombre, marca, escala, serie], name: "unique_producto_version") // RN-HU03-05: Prevención de duplicados
+  @@index([nombre], name: "idx_producto_nombre")                             // RN-HU03-06: Búsqueda rápida
+  @@index([categoria], name: "idx_producto_categoria")
+  @@index([estado], name: "idx_producto_estado")
+  @@map("productos")
+}
+
+// ----------------------------------------------------
+// HU-04: RECEPCIÓN DE LOTES E INVENTARIO POR UNIDAD
+// ----------------------------------------------------
+enum EstadoLote {
+  EN_TRANSITO
+  RECIBIDO
+  PROCESADO
+  CANCELADO
+}
+
+enum EstadoUnidadStock {
+  DISPONIBLE
+  RESERVADO
+  VENDIDO
+  DEFECTUOSO
+}
+
+model LoteIngreso {
+  id               Int                @id @default(autoincrement()) @map("id_lote")
+  codigoLote       String             @unique @map("codigo_lote") @db.VarChar(30) // LOTE-2026-01
+  proveedor        String             @map("proveedor") @db.VarChar(150)
+  fechaLlegada     DateTime?          @map("fecha_llegada")
+  estadoLote       EstadoLote         @default(RECIBIDO) @map("estado_lote")
+  costoFleteTotal  Decimal?           @map("costo_flete_total") @db.Decimal(10, 2)
+  observaciones    String?            @map("observaciones") @db.Text
+  fechaCreacion    DateTime           @default(now()) @map("fecha_creacion")
+
+  unidadesInventario InventarioUnidad[]
+
+  @@map("lotes_ingreso")
+}
+
+model InventarioUnidad {
+  id               Int                @id @default(autoincrement()) @map("id_inventario")
+  idProducto       Int                @map("id_producto")
+  idLote           Int?               @map("id_lote")
+  codigoSerie      String             @unique @map("codigo_serie_unitario") @db.VarChar(50) // LJ-ITEM-0001
+  estadoStock      EstadoUnidadStock  @default(DISPONIBLE) @map("estado_stock") // CP-11 cálculo dinámico
+  costoUnitario    Decimal?           @map("costo_adquisicion") @db.Decimal(10, 2)
+  fechaIngreso     DateTime           @default(now()) @map("fecha_ingreso")
+
+  producto         Producto           @relation(fields: [idProducto], references: [id], onDelete: Restrict)
+  lote             LoteIngreso?       @relation(fields: [idLote], references: [id], onDelete: SetNull)
+
+  @@index([idProducto, estadoStock], name: "idx_inventario_disp")
+  @@map("inventario_unidades")
+}

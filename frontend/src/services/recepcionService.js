@@ -1,7 +1,6 @@
-const API_URL = 'http://localhost:4000/api/recepciones';
+const API_URL = 'http://localhost:4000/api/lotes';
+const API_FALLBACK = 'http://localhost:4000/api/recepciones';
 
-// El endpoint y los nombres de campos deben confirmarse con el backend.
-// Este servicio queda aislado para poder ajustarlo sin modificar los componentes.
 async function responseData(response) {
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
@@ -11,10 +10,20 @@ async function responseData(response) {
 }
 
 export async function registrarRecepcion(payload) {
-  const response = await fetch(API_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-  return responseData(response);
+  try {
+    const response = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return await responseData(response);
+  } catch (err) {
+    // Si falla /api/lotes, reintentar con el alias /api/recepciones
+    const responseFallback = await fetch(API_FALLBACK, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return responseData(responseFallback);
+  }
 }

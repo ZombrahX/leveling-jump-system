@@ -3,29 +3,39 @@ const prisma = new PrismaClient();
 
 const registrarLoteConUnidades = async (req, res) => {
   try {
-    const { codigoLote, proveedor, observaciones, idProducto, cantidad, costoUnitario } = req.body;
+    const { codigoLote, proveedor, observaciones, idProducto, productoId, cantidad, costoUnitario } = req.body;
 
+    const cant = Number(cantidad);
     // PTLJ-28: Validación de cantidad obligatoria
-    if (!cantidad || cantidad <= 0) {
+    if (!cant || cant <= 0) {
       return res.status(400).json({ 
         error: "La cantidad es obligatoria y debe ser mayor a 0." 
       });
     }
 
-    if (!codigoLote || !idProducto) {
+    const targetProductoId = Number(idProducto || productoId);
+    if (!targetProductoId) {
       return res.status(400).json({ 
-        error: "El código de lote y el idProducto son obligatorios." 
+        error: "El producto a recibir (idProducto) es obligatorio." 
       });
     }
 
-    // Transacción de Prisma para asegurar integridad
+    const codLoteFinal = codigoLote && codigoLote.trim() 
+      ? codigoLote.trim() 
+      : `LOT-${new Date().getFullYear()}-${Date.now().toString().slice(-4)}`;
+      
+    const proveedorFinal = proveedor && proveedor.trim()
+      ? proveedor.trim()
+      : 'Bandai Namco Importaciones';
+
+    // Transacción de Prisma para asegurar integridad ACID
     const resultado = await prisma.$transaction(async (tx) => {
       // PTLJ-26: Registrar la recepción del lote
       const nuevoLote = await tx.loteIngreso.create({
         data: {
-          codigoLote,
-          proveedor,
-          observaciones,
+          codigoLote: codLoteFinal,
+          proveedor: proveedorFinal,
+          observaciones: observaciones ? observaciones.trim() : null,
           estadoLote: 'RECIBIDO',
           fechaLlegada: new Date()
         }
@@ -33,11 +43,11 @@ const registrarLoteConUnidades = async (req, res) => {
 
       // PTLJ-27: Generar automáticamente las unidades de inventario por lote
       const unidadesAcrear = [];
-      for (let i = 1; i <= cantidad; i++) {
-        const codigoSerie = `${codigoLote}-ITEM-${i.toString().padStart(4, '0')}`;
+      for (let i = 1; i <= cant; i++) {
+        const codigoSerie = `${codLoteFinal}-ITEM-${i.toString().padStart(4, '0')}`;
 
         unidadesAcrear.push({
-          idProducto: Number(idProducto),
+          idProducto: targetProductoId,
           idLote: nuevoLote.id,
           codigoSerie,
           costoUnitario: costoUnitario ? Number(costoUnitario) : null,
@@ -51,7 +61,7 @@ const registrarLoteConUnidades = async (req, res) => {
 
       return {
         lote: nuevoLote,
-        unidadesGeneradas: cantidad
+        unidadesGeneradas: cant
       };
     });
 
@@ -65,7 +75,7 @@ const registrarLoteConUnidades = async (req, res) => {
     if (error.code === 'P2002') {
       return res.status(400).json({ error: "El código de lote o algún código de serie ya existe." });
     }
-    return res.status(500).json({ error: "Error interno del servidor al procesar el lote." });
+    return res.status(500).json({ error: "Error interno del servidor al procesar el lote: " + error.message });
   }
 };
 

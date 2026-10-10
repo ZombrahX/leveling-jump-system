@@ -65,15 +65,15 @@ export default function App() {
     <main>
       <header className="app-header">
         <div>
-          <small>LEVELING JUMP · SPRINT 1</small>
-          <h1>Plataforma de productos e inventario</h1>
-          <p>Frontend del proyecto · HU03, HU04 y HU01</p>
+          <small>LEVELING JUMP · SISTEMA DE GESTIÓN</small>
+          <h1>Control de Inventario y Catálogo Comercial</h1>
+          <p>Model Kits, Figuras Coleccionables y Accesorios</p>
         </div>
       </header>
       <nav className="main-nav" aria-label="Secciones del sistema">
-        <button className={vista === 'productos' ? 'nav-button active' : 'nav-button'} onClick={() => chooseView('productos')}>Gestión de productos <span>HU03</span></button>
-        <button className={vista === 'recepcion' ? 'nav-button active' : 'nav-button'} onClick={() => chooseView('recepcion')}>Recepción de lotes <span>HU04</span></button>
-        <button className={vista === 'catalogo' ? 'nav-button active' : 'nav-button'} onClick={() => chooseView('catalogo')}>Catálogo público <span>HU01</span></button>
+        <button className={vista === 'productos' ? 'nav-button active' : 'nav-button'} onClick={() => chooseView('productos')}>Gestión de Productos</button>
+        <button className={vista === 'recepcion' ? 'nav-button active' : 'nav-button'} onClick={() => chooseView('recepcion')}>Recepción de Lotes</button>
+        <button className={vista === 'catalogo' ? 'nav-button active' : 'nav-button'} onClick={() => chooseView('catalogo')}>Catálogo Público</button>
       </nav>
 
       {vista === 'productos' && (
@@ -99,7 +99,7 @@ export default function App() {
           <PublicCatalog productos={productos} cargando={loading} error={error} onRecargar={load} />
         </div>
       )}
-      <footer className="app-footer">Leveling Jump · Interfaz frontend para integración con las API del equipo.</footer>
+      <footer className="app-footer">© 2026 Leveling Jump · Sistema Integral de Gestión de Inventario y Catálogo Multicanal.</footer>
     </main>
   );
 }

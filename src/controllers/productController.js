@@ -54,12 +54,26 @@ const obtenerProductos = async (req, res) => {
 
         const productos = await prisma.producto.findMany({
             where: filtro,
-            orderBy: { fechaCreacion: 'desc' }
+            include: {
+                _count: {
+                    select: {
+                        unidadesInventario: {
+                            where: { estadoStock: 'DISPONIBLE' }
+                        }
+                    }
+                }
+            },
+            orderBy: { id: 'desc' }
         });
 
+        const productosConStock = productos.map(p => ({
+            ...p,
+            stockDisponible: p._count ? p._count.unidadesInventario : 0
+        }));
+
         return res.status(200).json({
-            total: productos.length,
-            productos
+            total: productosConStock.length,
+            productos: productosConStock
         });
     } catch (error) {
         return res.status(500).json({

@@ -1,79 +1,191 @@
 import { useEffect, useState } from 'react';
 
-const initial = { productoId: '', cantidad: '1', fechaRecepcion: new Date().toISOString().slice(0, 10), observaciones: '' };
+const generarCodigoLote = () => {
+  const anio = new Date().getFullYear();
+  const aleatorio = Math.floor(100 + Math.random() * 900);
+  return `LOT-${anio}-${aleatorio}`;
+};
+
+const initial = {
+  codigoLote: '',
+  proveedor: 'Bandai Namco Importaciones',
+  idProducto: '',
+  cantidad: '5',
+  costoUnitario: '',
+  observaciones: ''
+};
 
 export default function ReceptionForm({ productos, onSubmit, cargando }) {
-  const [form, setForm] = useState(initial);
+  const [form, setForm] = useState({ ...initial, codigoLote: generarCodigoLote() });
   const [error, setError] = useState('');
   const [mensaje, setMensaje] = useState('');
 
   useEffect(() => {
-    if (!form.productoId && productos.length) {
-      setForm(current => ({ ...current, productoId: String(productos[0].id) }));
+    if (!form.idProducto && productos.length) {
+      setForm(current => ({ ...current, idProducto: String(productos[0].id) }));
     }
-  }, [productos, form.productoId]);
+  }, [productos, form.idProducto]);
 
-  const change = (event) => setForm({ ...form, [event.target.name]: event.target.value });
+  const change = e => setForm({ ...form, [e.target.name]: e.target.value });
 
-  const submit = async (event) => {
+  const nuevoCodigoLote = () => {
+    setForm(f => ({ ...f, codigoLote: generarCodigoLote() }));
+  };
+
+  const submit = async event => {
     event.preventDefault();
     setError('');
     setMensaje('');
-    if (!form.productoId) {
-      setError('Selecciona el producto que se está recibiendo.');
+
+    if (!form.idProducto) {
+      setError('Por favor selecciona el producto que se está recibiendo.');
       return;
     }
-    if (!form.cantidad || !Number.isInteger(Number(form.cantidad)) || Number(form.cantidad) < 1) {
-      setError('La cantidad es obligatoria y debe ser un número entero mayor que cero.');
+
+    if (!form.codigoLote.trim()) {
+      setError('El código de lote es obligatorio.');
       return;
     }
-    if (!form.fechaRecepcion) {
-      setError('La fecha de recepción es obligatoria.');
+
+    if (!form.proveedor.trim()) {
+      setError('El proveedor o distribuidor es obligatorio.');
       return;
     }
+
+    const cant = Number(form.cantidad);
+    if (!cant || !Number.isInteger(cant) || cant < 1) {
+      setError('La cantidad recibida es obligatoria y debe ser un número entero mayor que 0.');
+      return;
+    }
+
     try {
       await onSubmit({
-        productoId: Number(form.productoId),
-        cantidad: Number(form.cantidad),
-        fechaRecepcion: form.fechaRecepcion,
-        observaciones: form.observaciones.trim() || null,
+        codigoLote: form.codigoLote.trim(),
+        proveedor: form.proveedor.trim(),
+        idProducto: Number(form.idProducto),
+        cantidad: cant,
+        costoUnitario: form.costoUnitario ? Number(form.costoUnitario) : null,
+        observaciones: form.observaciones.trim() || null
       });
-      setMensaje('Solicitud de recepción enviada. Confirma el registro con la API del backend.');
-      setForm({ ...initial, fechaRecepcion: new Date().toISOString().slice(0, 10), productoId: form.productoId });
+
+      setMensaje(`¡Lote ${form.codigoLote} registrado con éxito! Se crearon ${cant} unidades en inventario disponibles.`);
+      setForm({
+        ...initial,
+        codigoLote: generarCodigoLote(),
+        idProducto: form.idProducto
+      });
     } catch (e) {
-      setError(e.message || 'No se pudo registrar la recepción.');
+      setError(e.message || 'No se pudo registrar la recepción del lote.');
     }
   };
 
   return (
     <section className="card">
-      <div className="section-kicker">HU04 · HU04-T07 / HU04-T08</div>
-      <h2>Registrar recepción de lote</h2>
-      <p className="muted">Registra la llegada de productos para que el backend procese la recepción y genere las unidades de inventario.</p>
+      <h2>Registrar recepción de lote de importación</h2>
+      <p className="muted">
+        Registra la llegada de mercadería. El sistema creará el lote y generará automáticamente cada unidad física en el inventario disponible.
+      </p>
+
       <form onSubmit={submit}>
-        <label>Producto recibido *
-          <select name="productoId" value={form.productoId} onChange={change} required>
-            <option value="">Seleccionar producto</option>
-            {productos.map(p => <option key={p.id} value={p.id}>{p.codigo ? `${p.codigo} — ` : ''}{p.nombre}</option>)}
-          </select>
-        </label>
         <div className="two">
-          <label>Cantidad recibida *
-            <input name="cantidad" type="number" min="1" step="1" value={form.cantidad} onChange={change} required />
+          <label>
+            Código de lote *
+            <div style={{ display: 'flex', gap: '6px' }}>
+              <input
+                name="codigoLote"
+                value={form.codigoLote}
+                onChange={change}
+                placeholder="Ej: LOT-2026-001"
+                required
+              />
+              <button
+                type="button"
+                className="secondary"
+                onClick={nuevoCodigoLote}
+                style={{ padding: '8px 10px', fontSize: '12px' }}
+                title="Generar nuevo código"
+              >
+                Nuevo
+              </button>
+            </div>
           </label>
-          <label>Fecha de recepción *
-            <input name="fechaRecepcion" type="date" value={form.fechaRecepcion} onChange={change} required />
+
+          <label>
+            Proveedor / Distribuidor *
+            <input
+              name="proveedor"
+              value={form.proveedor}
+              onChange={change}
+              placeholder="Ej: Bandai Namco, Good Smile, etc."
+              required
+            />
           </label>
         </div>
-        <label>Observaciones (opcional)
-          <textarea name="observaciones" value={form.observaciones} onChange={change} rows="3" placeholder="Referencia del lote o comentario adicional" />
+
+        <label>
+          Producto recibido *
+          <select name="idProducto" value={form.idProducto} onChange={change} required>
+            <option value="">Seleccionar producto del catálogo</option>
+            {productos.map(p => (
+              <option key={p.id} value={p.id}>
+                {p.codigo ? `[${p.codigo}] ` : ''}{p.nombre} — {p.marca}
+              </option>
+            ))}
+          </select>
         </label>
-        {productos.length === 0 && <p className="notice">No hay productos cargados. Verifica que el backend esté disponible y que existan productos registrados.</p>}
+
+        <div className="two">
+          <label>
+            Cantidad recibida (unidades físicas) *
+            <input
+              name="cantidad"
+              type="number"
+              min="1"
+              step="1"
+              value={form.cantidad}
+              onChange={change}
+              required
+            />
+          </label>
+
+          <label>
+            Costo unitario de adquisición (S/ - opcional)
+            <input
+              name="costoUnitario"
+              type="number"
+              min="0.01"
+              step="0.01"
+              value={form.costoUnitario}
+              onChange={change}
+              placeholder="0.00"
+            />
+          </label>
+        </div>
+
+        <label>
+          Observaciones del lote (opcional)
+          <textarea
+            name="observaciones"
+            value={form.observaciones}
+            onChange={change}
+            rows="2"
+            placeholder="Detalles del envío, estado de las cajas, flete aduanero, etc."
+          />
+        </label>
+
+        {productos.length === 0 && (
+          <p className="notice">
+            Aún no hay productos en el catálogo. Registra primero un producto en la pestaña 'Gestión de productos'.
+          </p>
+        )}
+
         {error && <div className="alert err">{error}</div>}
         {mensaje && <div className="alert ok">{mensaje}</div>}
-        <button className="primary" disabled={cargando || productos.length === 0}>{cargando ? 'Enviando…' : 'Registrar recepción'}</button>
+
+        <button className="primary" disabled={cargando || productos.length === 0}>
+          {cargando ? 'Procesando recepción…' : 'Registrar recepción y generar unidades'}
+        </button>
       </form>
-      <p className="small-note">Nota técnica: el endpoint y el formato del payload son provisionales hasta que Adriano confirme el contrato de la API.</p>
     </section>
   );
 }

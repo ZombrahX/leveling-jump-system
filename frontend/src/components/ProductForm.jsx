@@ -85,6 +85,9 @@ export default function ProductForm({ initialData, isEditing, onSubmit, onCancel
     });
   };
 
+  const mostrarMarcaCustom = form.marca === 'Otra';
+  const mostrarSerieCustom = form.serie === 'Otra / Ninguna';
+
   return (
     <section className="card">
       <h2>{isEditing ? 'Editar producto' : 'Registrar producto'}</h2>
@@ -172,15 +175,6 @@ export default function ProductForm({ initialData, isEditing, onSubmit, onCancel
                 <option key={m} value={m}>{m}</option>
               ))}
             </select>
-            {form.marca === 'Otra' && (
-              <input
-                style={{ marginTop: '6px' }}
-                placeholder="Especifica el fabricante..."
-                value={marcaPersonalizada}
-                onChange={e => setMarcaPersonalizada(e.target.value)}
-                required
-              />
-            )}
           </label>
 
           <label>
@@ -195,16 +189,40 @@ export default function ProductForm({ initialData, isEditing, onSubmit, onCancel
                 <option key={s} value={s}>{s}</option>
               ))}
             </select>
-            {form.serie === 'Otra / Ninguna' && (
-              <input
-                style={{ marginTop: '6px' }}
-                placeholder="Especifica la franquicia..."
-                value={seriePersonalizada}
-                onChange={e => setSeriePersonalizada(e.target.value)}
-              />
-            )}
           </label>
         </div>
+
+        {/* Fila dedicada y alineada cuando el usuario elige 'Otra' */}
+        {(mostrarMarcaCustom || mostrarSerieCustom) && (
+          <div className="two" style={{ marginTop: '-4px', marginBottom: '4px' }}>
+            <div>
+              {mostrarMarcaCustom ? (
+                <label>
+                  Especificar fabricante *
+                  <input
+                    placeholder="Ej: Volks, Sentinel, etc."
+                    value={marcaPersonalizada}
+                    onChange={e => setMarcaPersonalizada(e.target.value)}
+                    required
+                  />
+                </label>
+              ) : <div style={{ height: 0 }} />}
+            </div>
+
+            <div>
+              {mostrarSerieCustom ? (
+                <label>
+                  Especificar franquicia
+                  <input
+                    placeholder="Ej: Macross, Fate, etc."
+                    value={seriePersonalizada}
+                    onChange={e => setSeriePersonalizada(e.target.value)}
+                  />
+                </label>
+              ) : <div style={{ height: 0 }} />}
+            </div>
+          </div>
+        )}
 
         <div className="two">
           <label>

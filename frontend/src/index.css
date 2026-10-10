@@ -54,5 +54,11 @@ td small { display: block; color: #697386; margin-top: 3px; }
 .empty-state { display: flex; flex-direction: column; gap: 5px; text-align: center; padding: 40px 15px; color: #667085; }
 .empty-state strong { color: #27334b; }
 .app-footer { text-align: center; color: #8991a2; font-size: 12px; padding: 28px 0 5px; }
+th { cursor: pointer; transition: background 0.2s, color 0.2s; }
+th:hover { background: #f1f4fa; color: #1e2855; }
+.status-badge { display: inline-block; padding: 3px 8px; border-radius: 999px; font-size: 11px; font-weight: 750; }
+.status-badge.active { background: #ecfdf3; color: #027a48; border: 1px solid #abefc6; }
+.status-badge.inactive { background: #f2f4f7; color: #475467; border: 1px solid #eaecf0; }
+
 @media (max-width: 1000px) { .grid { grid-template-columns: 1fr; } .product-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 650px) { main { padding: 15px; } .two, .filters { grid-template-columns: 1fr; } .product-grid { grid-template-columns: 1fr; } .catalog-heading { flex-direction: column; } .nav-button { padding: 10px; } .card, .public-catalog { padding: 16px; } }

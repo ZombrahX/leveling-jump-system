@@ -6,6 +6,12 @@ import PublicCatalog from './components/PublicCatalog';
 import { obtenerProductos, crearProducto, actualizarProducto } from './services/productService';
 import { registrarRecepcion } from './services/recepcionService';
 
+const SECCIONES_SISTEMA = [
+  { id: 'productos', label: 'Gestión de Productos', icon: '📦' },
+  { id: 'recepcion', label: 'Recepción de Lotes',   icon: '📥' },
+  { id: 'catalogo',  label: 'Catálogo Público',    icon: '🛍️' },
+];
+
 const empty = { codigo: '', nombre: '', descripcion: '', categoria: 'MODEL_KITS', serie: '', escala: 'NO_APLICA', marca: '', precio: '', imagenUrl: '', estado: 'ACTIVO' };
 
 export default function App() {
@@ -71,9 +77,16 @@ export default function App() {
         </div>
       </header>
       <nav className="main-nav" aria-label="Secciones del sistema">
-        <button className={vista === 'productos' ? 'nav-button active' : 'nav-button'} onClick={() => chooseView('productos')}>Gestión de Productos</button>
-        <button className={vista === 'recepcion' ? 'nav-button active' : 'nav-button'} onClick={() => chooseView('recepcion')}>Recepción de Lotes</button>
-        <button className={vista === 'catalogo' ? 'nav-button active' : 'nav-button'} onClick={() => chooseView('catalogo')}>Catálogo Público</button>
+        {SECCIONES_SISTEMA.map(sec => (
+          <button
+            key={sec.id}
+            className={`nav-button ${vista === sec.id ? 'active' : ''}`}
+            onClick={() => chooseView(sec.id)}
+          >
+            <span style={{ marginRight: '6px' }}>{sec.icon}</span>
+            {sec.label}
+          </button>
+        ))}
       </nav>
 
       {vista === 'productos' && (

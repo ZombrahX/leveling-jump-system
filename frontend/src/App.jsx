@@ -60,6 +60,23 @@ export default function App() {
     await load();
   };
 
+  const toggleEstadoProduct = async producto => {
+    try {
+      const nuevoEstado = producto.estado === 'ACTIVO' ? 'INACTIVO' : 'ACTIVO';
+      const accion = nuevoEstado === 'INACTIVO' ? 'desactivado' : 'activado';
+      if (!window.confirm(`¿Deseas ${nuevoEstado === 'INACTIVO' ? 'desactivar' : 'activar'} el producto "${producto.nombre}"?`)) {
+        return;
+      }
+      setError('');
+      setMsg('');
+      await actualizarProducto(producto.id, { estado: nuevoEstado });
+      setMsg(`Producto ${accion} correctamente en el catálogo.`);
+      await load();
+    } catch (e) {
+      setError(e.message || 'No se pudo cambiar el estado del producto.');
+    }
+  };
+
   const chooseView = next => {
     setVista(next);
     setError('');
@@ -70,10 +87,15 @@ export default function App() {
   return (
     <main>
       <header className="app-header">
-        <div>
-          <small>LEVELING JUMP · SISTEMA DE GESTIÓN</small>
-          <h1>Control de Inventario y Catálogo Comercial</h1>
-          <p>Model Kits, Figuras Coleccionables y Accesorios</p>
+        <div className="brand-wrapper">
+          <div className="brand-logo-circle">
+            <img src="/logo_leveling_jump.jpg" alt="Leveling Jump Logo" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+          </div>
+          <div>
+            <small>LEVELING JUMP · SISTEMA DE GESTIÓN</small>
+            <h1>Control de Inventario y Catálogo Comercial</h1>
+            <p>Model Kits, Figuras Coleccionables y Accesorios</p>
+          </div>
         </div>
       </header>
       <nav className="main-nav" aria-label="Secciones del sistema">
@@ -93,7 +115,7 @@ export default function App() {
         <>
           <div className="grid">
             <ProductForm initialData={edit || empty} isEditing={!!edit} onSubmit={saveProduct} onCancel={() => setEdit(null)} />
-            <ProductList productos={productos} busqueda={busqueda} categoria={categoria} onBusquedaChange={setBusqueda} onCategoriaChange={setCategoria} onEdit={setEdit} cargando={loading} />
+            <ProductList productos={productos} busqueda={busqueda} categoria={categoria} onBusquedaChange={setBusqueda} onCategoriaChange={setCategoria} onEdit={setEdit} onToggleEstado={toggleEstadoProduct} cargando={loading} />
           </div>
           {msg && <div className="alert ok">{msg}</div>}
           {error && <div className="alert err">{error}</div>}

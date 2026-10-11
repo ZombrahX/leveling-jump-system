@@ -7,6 +7,7 @@ export default function ProductList({
   onBusquedaChange,
   onCategoriaChange,
   onEdit,
+  onToggleEstado,
   cargando
 }) {
   const [sortField, setSortField] = useState('id');
@@ -100,7 +101,7 @@ export default function ProductList({
                 <th style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => toggleSort('estado')} title="Ordenar por Estado">
                   Estado {getSortIcon('estado')}
                 </th>
-                <th style={{ width: '60px' }}>Acción</th>
+                <th style={{ width: '130px' }}>Acción</th>
               </tr>
             </thead>
             <tbody>
@@ -121,9 +122,20 @@ export default function ProductList({
                     </span>
                   </td>
                   <td>
-                    <button className="link" onClick={() => onEdit(p)}>
-                      Editar
-                    </button>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <button className="link" onClick={() => onEdit(p)}>
+                        Editar
+                      </button>
+                      <span style={{ color: '#cbd5e1' }}>|</span>
+                      <button
+                        className="link"
+                        style={{ color: p.estado === 'ACTIVO' ? '#ef4444' : '#059669' }}
+                        onClick={() => onToggleEstado(p)}
+                        title={p.estado === 'ACTIVO' ? 'Deshabilitar producto del catálogo' : 'Habilitar producto en el catálogo'}
+                      >
+                        {p.estado === 'ACTIVO' ? 'Desactivar' : 'Activar'}
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

@@ -68,20 +68,21 @@ export default function ProductForm({ initialData, isEditing, onSubmit, onCancel
     }
 
     const serieFinal = form.serie === 'Otra / Ninguna' 
-      ? (seriePersonalizada.trim() || null) 
-      : (form.serie.trim() || null);
+      ? (seriePersonalizada?.trim() || null) 
+      : (form.serie?.trim() || null);
 
-    const imagenFinal = form.imagenUrl.trim() || 'https://images.unsplash.com/photo-1594787318286-3d835c1d207f?w=500';
+    const imagenFinal = form.imagenUrl?.trim() || 'https://images.unsplash.com/photo-1594787318286-3d835c1d207f?w=500';
 
     onSubmit({
       ...form,
-      codigo: form.codigo.trim(),
-      nombre: form.nombre.trim(),
-      descripcion: form.descripcion.trim() || null,
+      codigo: form.codigo?.trim() || '',
+      nombre: form.nombre?.trim() || '',
+      descripcion: form.descripcion?.trim() || null,
       serie: serieFinal,
       marca: marcaFinal,
       precio: Number(form.precio),
-      imagenUrl: imagenFinal
+      imagenUrl: imagenFinal,
+      estado: form.estado || 'ACTIVO'
     });
   };
 

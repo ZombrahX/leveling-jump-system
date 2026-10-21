@@ -1,9 +1,25 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
+/**
+ * PTLJ-26, PTLJ-27, PTLJ-28 & HU-12: Registrar la recepción de un lote con sus unidades de inventario
+ * Diferencia entre fecha física de llegada (fechaLlegada) y fecha inmutable de registro (fechaCreacion).
+ * Permite registrar documento de referencia (factura / guía de remisión).
+ */
 const registrarLoteConUnidades = async (req, res) => {
   try {
-    const { codigoLote, proveedor, observaciones, idProducto, productoId, cantidad, costoUnitario } = req.body;
+    const {
+      codigoLote,
+      proveedor,
+      documentoReferencia,
+      fechaLlegada,
+      observaciones,
+      idProducto,
+      productoId,
+      cantidad,
+      costoUnitario,
+      costoFleteTotal
+    } = req.body;
 
     const cant = Number(cantidad);
     // PTLJ-28: Validación de cantidad obligatoria
@@ -20,24 +36,32 @@ const registrarLoteConUnidades = async (req, res) => {
       });
     }
 
+    if (!proveedor || !proveedor.trim()) {
+      return res.status(400).json({
+        error: "El nombre del proveedor o distribuidor es obligatorio."
+      });
+    }
+
     const codLoteFinal = codigoLote && codigoLote.trim() 
       ? codigoLote.trim() 
       : `LOT-${new Date().getFullYear()}-${Date.now().toString().slice(-4)}`;
-      
-    const proveedorFinal = proveedor && proveedor.trim()
-      ? proveedor.trim()
-      : 'Bandai Namco Importaciones';
+
+    // HU-12: Fecha física de arribo vs fecha de registro del sistema
+    const fechaLlegadaFinal = fechaLlegada ? new Date(fechaLlegada) : new Date();
 
     // Transacción de Prisma para asegurar integridad ACID
     const resultado = await prisma.$transaction(async (tx) => {
-      // PTLJ-26: Registrar la recepción del lote
+      // PTLJ-26 & HU-12: Registrar la recepción del lote
       const nuevoLote = await tx.loteIngreso.create({
         data: {
           codigoLote: codLoteFinal,
-          proveedor: proveedorFinal,
+          proveedor: proveedor.trim(),
+          documentoReferencia: documentoReferencia ? documentoReferencia.trim() : null,
+          fechaLlegada: fechaLlegadaFinal,
+          costoFleteTotal: costoFleteTotal ? Number(costoFleteTotal) : null,
           observaciones: observaciones ? observaciones.trim() : null,
-          estadoLote: 'RECIBIDO',
-          fechaLlegada: new Date()
+          estadoLote: 'RECIBIDO'
+          // fechaCreacion se genera automáticamente con @default(now())
         }
       });
 
@@ -79,6 +103,33 @@ const registrarLoteConUnidades = async (req, res) => {
   }
 };
 
+/**
+ * HU-12: Obtener historial de lotes recibidos
+ */
+const obtenerLotes = async (req, res) => {
+  try {
+    const lotes = await prisma.loteIngreso.findMany({
+      include: {
+        _count: {
+          select: { unidadesInventario: true }
+        }
+      },
+      orderBy: { fechaCreacion: 'desc' }
+    });
+
+    return res.status(200).json({
+      total: lotes.length,
+      lotes: lotes.map(l => ({
+        ...l,
+        totalUnidades: l._count ? l._count.unidadesInventario : 0
+      }))
+    });
+  } catch (error) {
+    return res.status(500).json({ error: "Error al obtener historial de lotes: " + error.message });
+  }
+};
+
 module.exports = {
-  registrarLoteConUnidades
+  registrarLoteConUnidades,
+  obtenerLotes
 };

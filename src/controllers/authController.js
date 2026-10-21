@@ -1,0 +1,553 @@
+const { PrismaClient } = require('@prisma/client');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const { enviarCodigoVerificacion } = require('../services/emailService');
+const { JWT_SECRET } = require('../middlewares/authMiddleware');
+
+const prisma = new PrismaClient();
+
+// Correo oficial del Superadmin (Dueño)
+const CORREO_SUPERADMIN_OFICIAL = 'cesar.sanchez@isil.pe';
+
+/**
+ * PTLJ-43 / HU-11: Registro de usuario con verificación de correo real (OTP)
+ */
+const registro = async (req, res) => {
+  try {
+    const { nombre, email, password, telefono } = req.body;
+
+    if (!nombre || !email || !password) {
+      return res.status(400).json({ error: 'Nombre, correo electrónico y contraseña son obligatorios.' });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres.' });
+    }
+
+    const emailNormalizado = email.trim().toLowerCase();
+    const codigoOtp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiracion = new Date(Date.now() + 15 * 60 * 1000); // 15 minutos
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    // Determinar si es el Superadmin (Cesar Sanchez / primer usuario) o Cliente
+    const totalUsuarios = await prisma.usuario.count();
+    const rolAsignado = (emailNormalizado === CORREO_SUPERADMIN_OFICIAL || totalUsuarios === 0) 
+      ? 'SUPERADMIN' 
+      : 'CLIENTE';
+
+    const usuarioExistente = await prisma.usuario.findUnique({
+      where: { email: emailNormalizado }
+    });
+
+    let usuario;
+    if (usuarioExistente) {
+      if (usuarioExistente.emailVerificado) {
+        return res.status(400).json({ error: 'Este correo electrónico ya está registrado y verificado. Inicia sesión.' });
+      }
+      // Si existía pero no estaba verificado, actualizamos el código y la contraseña
+      usuario = await prisma.usuario.update({
+        where: { id: usuarioExistente.id },
+        data: {
+          nombre: nombre.trim(),
+          passwordHash,
+          telefono: telefono ? telefono.trim() : null,
+          codigoVerificacion: codigoOtp,
+          expiracionCodigo: expiracion
+        }
+      });
+    } else {
+      usuario = await prisma.usuario.create({
+        data: {
+          nombre: nombre.trim(),
+          email: emailNormalizado,
+          passwordHash,
+          rol: rolAsignado,
+          metodoRegistro: 'LOCAL',
+          emailVerificado: false,
+          codigoVerificacion: codigoOtp,
+          expiracionCodigo: expiracion,
+          telefono: telefono ? telefono.trim() : null,
+          permisosModulos: rolAsignado === 'SUPERADMIN' ? ['PRODUCTOS', 'LOTES', 'RESERVAS', 'USUARIOS'] : null
+        }
+      });
+    }
+
+    // Enviar correo real con Nodemailer
+    await enviarCodigoVerificacion(emailNormalizado, usuario.nombre, codigoOtp);
+
+    return res.status(201).json({
+      mensaje: 'Código de verificación de 6 dígitos enviado exitosamente a tu correo.',
+      email: emailNormalizado,
+      tiempoExpiracionMinutos: 15
+    });
+
+  } catch (error) {
+    console.error('[AuthController.registro] Error:', error);
+    return res.status(500).json({ error: 'Error al registrar usuario: ' + error.message });
+  }
+};
+
+/**
+ * PTLJ-43 / HU-11: Validar código OTP y activar cuenta
+ */
+const verificarCodigo = async (req, res) => {
+  try {
+    const { email, codigo } = req.body;
+
+    if (!email || !codigo) {
+      return res.status(400).json({ error: 'El correo y el código de verificación son obligatorios.' });
+    }
+
+    const emailNormalizado = email.trim().toLowerCase();
+    const usuario = await prisma.usuario.findUnique({
+      where: { email: emailNormalizado }
+    });
+
+    if (!usuario) {
+      return res.status(404).json({ error: 'No se encontró ninguna cuenta asociada a este correo.' });
+    }
+
+    if (usuario.emailVerificado) {
+      return res.status(200).json({ mensaje: 'Esta cuenta ya está verificada. Puedes iniciar sesión.' });
+    }
+
+    if (usuario.codigoVerificacion !== codigo.trim()) {
+      return res.status(400).json({ error: 'Código de verificación incorrecto.' });
+    }
+
+    if (usuario.expiracionCodigo && new Date() > usuario.expiracionCodigo) {
+      return res.status(400).json({ error: 'El código ha expirado. Solicita un nuevo código de verificación.' });
+    }
+
+    // Activar cuenta
+    const usuarioVerificado = await prisma.usuario.update({
+      where: { id: usuario.id },
+      data: {
+        emailVerificado: true,
+        codigoVerificacion: null,
+        expiracionCodigo: null
+      }
+    });
+
+    // Generar sesión JWT
+    const token = jwt.sign({
+      id: usuarioVerificado.id,
+      email: usuarioVerificado.email,
+      nombre: usuarioVerificado.nombre,
+      rol: usuarioVerificado.rol,
+      permisosModulos: usuarioVerificado.permisosModulos
+    }, JWT_SECRET, { expiresIn: '7d' });
+
+    return res.status(200).json({
+      mensaje: '¡Correo verificado con éxito! Bienvenido a Leveling Jump.',
+      token,
+      usuario: {
+        id: usuarioVerificado.id,
+        nombre: usuarioVerificado.nombre,
+        email: usuarioVerificado.email,
+        rol: usuarioVerificado.rol,
+        permisosModulos: usuarioVerificado.permisosModulos
+      }
+    });
+
+  } catch (error) {
+    console.error('[AuthController.verificarCodigo] Error:', error);
+    return res.status(500).json({ error: 'Error al verificar código: ' + error.message });
+  }
+};
+
+/**
+ * Reenviar código OTP de verificación
+ */
+const reenviarCodigo = async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ error: 'El correo electrónico es obligatorio.' });
+    }
+
+    const emailNormalizado = email.trim().toLowerCase();
+    const usuario = await prisma.usuario.findUnique({
+      where: { email: emailNormalizado }
+    });
+
+    if (!usuario) {
+      return res.status(404).json({ error: 'No se encontró la cuenta.' });
+    }
+
+    if (usuario.emailVerificado) {
+      return res.status(400).json({ error: 'La cuenta ya está verificada.' });
+    }
+
+    const nuevoCodigo = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiracion = new Date(Date.now() + 15 * 60 * 1000);
+
+    await prisma.usuario.update({
+      where: { id: usuario.id },
+      data: {
+        codigoVerificacion: nuevoCodigo,
+        expiracionCodigo: expiracion
+      }
+    });
+
+    await enviarCodigoVerificacion(emailNormalizado, usuario.nombre, nuevoCodigo);
+
+    return res.status(200).json({ mensaje: 'Nuevo código de verificación enviado a tu correo.' });
+  } catch (error) {
+    console.error('[AuthController.reenviarCodigo] Error:', error);
+    return res.status(500).json({ error: 'Error al reenviar código: ' + error.message });
+  }
+};
+
+/**
+ * PTLJ-43 / HU-11: Inicio de sesión con correo y contraseña
+ */
+const login = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ error: 'El correo y la contraseña son obligatorios.' });
+    }
+
+    const emailNormalizado = email.trim().toLowerCase();
+    const usuario = await prisma.usuario.findUnique({
+      where: { email: emailNormalizado }
+    });
+
+    // Rechazar credenciales inválidas sin revelar si el correo existe (Criterio Jira & OWASP)
+    if (!usuario || !usuario.activo) {
+      return res.status(401).json({ error: 'Credenciales inválidas. Verifica tu correo y contraseña.' });
+    }
+
+    if (!usuario.passwordHash) {
+      return res.status(400).json({ 
+        error: 'Esta cuenta fue creada mediante Google. Por favor, inicia sesión con Google.' 
+      });
+    }
+
+    const passwordValido = await bcrypt.compare(password, usuario.passwordHash);
+    if (!passwordValido) {
+      return res.status(401).json({ error: 'Credenciales inválidas. Verifica tu correo y contraseña.' });
+    }
+
+    // Verificar si el correo ya fue confirmado
+    if (!usuario.emailVerificado) {
+      // Reenviar código fresco
+      const nuevoCodigo = Math.floor(100000 + Math.random() * 900000).toString();
+      const expiracion = new Date(Date.now() + 15 * 60 * 1000);
+      await prisma.usuario.update({
+        where: { id: usuario.id },
+        data: { codigoVerificacion: nuevoCodigo, expiracionCodigo: expiracion }
+      });
+      await enviarCodigoVerificacion(emailNormalizado, usuario.nombre, nuevoCodigo);
+
+      return res.status(403).json({
+        error: 'Tu cuenta aún no ha sido verificada. Te enviamos un nuevo código a tu correo.',
+        requiereVerificacion: true,
+        email: emailNormalizado
+      });
+    }
+
+    // Generar token JWT con rol
+    const token = jwt.sign({
+      id: usuario.id,
+      email: usuario.email,
+      nombre: usuario.nombre,
+      rol: usuario.rol,
+      permisosModulos: usuario.permisosModulos
+    }, JWT_SECRET, { expiresIn: '7d' });
+
+    return res.status(200).json({
+      mensaje: 'Inicio de sesión exitoso.',
+      token,
+      usuario: {
+        id: usuario.id,
+        nombre: usuario.nombre,
+        email: usuario.email,
+        telefono: usuario.telefono,
+        rol: usuario.rol,
+        permisosModulos: usuario.permisosModulos
+      }
+    });
+
+  } catch (error) {
+    console.error('[AuthController.login] Error:', error);
+    return res.status(500).json({ error: 'Error al iniciar sesión: ' + error.message });
+  }
+};
+
+/**
+ * PTLJ-43 / HU-11: Inicio de sesión con Google (OAuth)
+ */
+const loginGoogle = async (req, res) => {
+  try {
+    const { email, nombre } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ error: 'El correo de Google es obligatorio.' });
+    }
+
+    const emailNormalizado = email.trim().toLowerCase();
+    let usuario = await prisma.usuario.findUnique({
+      where: { email: emailNormalizado }
+    });
+
+    if (!usuario) {
+      const total = await prisma.usuario.count();
+      const rol = (emailNormalizado === CORREO_SUPERADMIN_OFICIAL || total === 0) ? 'SUPERADMIN' : 'CLIENTE';
+
+      usuario = await prisma.usuario.create({
+        data: {
+          nombre: nombre ? nombre.trim() : emailNormalizado.split('@')[0],
+          email: emailNormalizado,
+          rol,
+          metodoRegistro: 'GOOGLE',
+          emailVerificado: true, // Google ya verificó el correo
+          permisosModulos: rol === 'SUPERADMIN' ? ['PRODUCTOS', 'LOTES', 'RESERVAS', 'USUARIOS'] : null
+        }
+      });
+    } else {
+      // Si existía, aseguramos que su correo figure verificado
+      if (!usuario.emailVerificado) {
+        usuario = await prisma.usuario.update({
+          where: { id: usuario.id },
+          data: { emailVerificado: true }
+        });
+      }
+    }
+
+    const token = jwt.sign({
+      id: usuario.id,
+      email: usuario.email,
+      nombre: usuario.nombre,
+      rol: usuario.rol,
+      permisosModulos: usuario.permisosModulos
+    }, JWT_SECRET, { expiresIn: '7d' });
+
+    return res.status(200).json({
+      mensaje: 'Autenticado con Google exitosamente.',
+      token,
+      usuario: {
+        id: usuario.id,
+        nombre: usuario.nombre,
+        email: usuario.email,
+        telefono: usuario.telefono,
+        rol: usuario.rol,
+        permisosModulos: usuario.permisosModulos
+      }
+    });
+
+  } catch (error) {
+    console.error('[AuthController.loginGoogle] Error:', error);
+    return res.status(500).json({ error: 'Error en autenticación Google: ' + error.message });
+  }
+};
+
+/**
+ * Obtener perfil del usuario autenticado
+ */
+const obtenerPerfil = async (req, res) => {
+  try {
+    const usuario = await prisma.usuario.findUnique({
+      where: { id: req.usuario.id },
+      select: {
+        id: true,
+        nombre: true,
+        email: true,
+        rol: true,
+        metodoRegistro: true,
+        emailVerificado: true,
+        telefono: true,
+        permisosModulos: true,
+        fechaCreacion: true
+      }
+    });
+
+    if (!usuario) {
+      return res.status(404).json({ error: 'Usuario no encontrado.' });
+    }
+
+    return res.status(200).json(usuario);
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+/**
+ * Actualizar datos personales del perfil del usuario autenticado
+ */
+const actualizarPerfil = async (req, res) => {
+  try {
+    const { nombre, telefono } = req.body;
+    const dataUpdate = {};
+
+    if (nombre && nombre.trim()) {
+      dataUpdate.nombre = nombre.trim();
+    }
+    if (telefono !== undefined) {
+      dataUpdate.telefono = telefono ? telefono.trim() : null;
+    }
+
+    const usuarioActualizado = await prisma.usuario.update({
+      where: { id: req.usuario.id },
+      data: dataUpdate,
+      select: {
+        id: true,
+        nombre: true,
+        email: true,
+        rol: true,
+        metodoRegistro: true,
+        emailVerificado: true,
+        telefono: true,
+        permisosModulos: true,
+        fechaCreacion: true
+      }
+    });
+
+    return res.status(200).json({
+      mensaje: 'Perfil actualizado correctamente.',
+      usuario: usuarioActualizado
+    });
+  } catch (error) {
+    console.error('[AuthController.actualizarPerfil] Error:', error);
+    return res.status(500).json({ error: 'Error al actualizar perfil: ' + error.message });
+  }
+};
+
+/**
+ * Crear miembro de Staff (Solo Superadmin puede crearlos)
+ */
+const crearStaff = async (req, res) => {
+  try {
+    const { nombre, email, password, rol = 'ADMIN', permisosModulos } = req.body;
+
+    // Solo el Superadmin puede crear staff
+    if (req.usuario.rol !== 'SUPERADMIN') {
+      return res.status(403).json({ error: 'Solo el Superadministrador puede registrar personal de staff.' });
+    }
+
+    if (!nombre || !email || !password) {
+      return res.status(400).json({ error: 'Nombre, correo y contraseña son obligatorios.' });
+    }
+
+    const emailNormalizado = email.trim().toLowerCase();
+    const existe = await prisma.usuario.findUnique({
+      where: { email: emailNormalizado }
+    });
+
+    if (existe) {
+      return res.status(400).json({ error: 'El correo ya se encuentra registrado.' });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    const rolFinal = rol === 'SUPERADMIN' ? 'SUPERADMIN' : 'ADMIN';
+    const nuevoStaff = await prisma.usuario.create({
+      data: {
+        nombre: nombre.trim(),
+        email: emailNormalizado,
+        passwordHash,
+        rol: rolFinal,
+        metodoRegistro: 'LOCAL',
+        emailVerificado: true, // Cuenta de staff creada por el dueño, ya verificada
+        permisosModulos: rolFinal === 'SUPERADMIN' 
+          ? ['PRODUCTOS', 'LOTES', 'RESERVAS', 'USUARIOS'] 
+          : (permisosModulos || ['PRODUCTOS', 'LOTES', 'RESERVAS'])
+      }
+    });
+
+    return res.status(201).json({
+      mensaje: `Miembro de staff (${nuevoStaff.rol}) creado exitosamente.`,
+      staff: {
+        id: nuevoStaff.id,
+        nombre: nuevoStaff.nombre,
+        email: nuevoStaff.email,
+        rol: nuevoStaff.rol,
+        permisosModulos: nuevoStaff.permisosModulos
+      }
+    });
+
+  } catch (error) {
+    return res.status(500).json({ error: 'Error al crear miembro de staff: ' + error.message });
+  }
+};
+
+/**
+ * Listar miembros de Staff (SUPERADMIN y ADMIN)
+ */
+const listarStaff = async (req, res) => {
+  try {
+    const staff = await prisma.usuario.findMany({
+      where: {
+        rol: { in: ['SUPERADMIN', 'ADMIN'] }
+      },
+      select: {
+        id: true,
+        nombre: true,
+        email: true,
+        rol: true,
+        activo: true,
+        emailVerificado: true,
+        permisosModulos: true,
+        fechaCreacion: true
+      },
+      orderBy: { fechaCreacion: 'asc' }
+    });
+
+    return res.status(200).json(staff);
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+/**
+ * Alternar estado activo/inactivo de miembro de staff.
+ * REGLA INMUTABLE: La cuenta del Propietario Principal NUNCA puede ser desactivada ni eliminada.
+ */
+const toggleEstadoStaff = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const targetUsuario = await prisma.usuario.findUnique({
+      where: { id: parseInt(id) }
+    });
+
+    if (!targetUsuario) {
+      return res.status(404).json({ error: 'Usuario no encontrado.' });
+    }
+
+    if (targetUsuario.id === 1 || targetUsuario.email === CORREO_SUPERADMIN_OFICIAL) {
+      return res.status(403).json({ 
+        error: 'Operación denegada: La cuenta del Propietario Principal no puede ser desactivada ni revocada.' 
+      });
+    }
+
+    const usuarioActualizado = await prisma.usuario.update({
+      where: { id: parseInt(id) },
+      data: { activo: !targetUsuario.activo }
+    });
+
+    return res.status(200).json({
+      mensaje: `Usuario ${usuarioActualizado.nombre} ${usuarioActualizado.activo ? 'activado' : 'desactivado'} con éxito.`,
+      usuario: {
+        id: usuarioActualizado.id,
+        nombre: usuarioActualizado.nombre,
+        activo: usuarioActualizado.activo
+      }
+    });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+module.exports = {
+  registro,
+  verificarCodigo,
+  reenviarCodigo,
+  login,
+  loginGoogle,
+  obtenerPerfil,
+  actualizarPerfil,
+  crearStaff,
+  listarStaff,
+  toggleEstadoStaff
+};

@@ -3,10 +3,12 @@ node_modules/
 .pnp
 .pnp.js
 
-# Environment Variables
+# Environment Variables & Secrets
 .env
 .env.local
 .env.*.local
+client_secret*.json
+*.credentials.json
 
 # Production Build
 dist/

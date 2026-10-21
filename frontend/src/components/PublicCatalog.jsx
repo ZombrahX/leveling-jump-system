@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { reservaPoliticaService } from '../services/reservaPoliticaService';
 
 const categories = ['MODEL_KITS', 'FIGURAS', 'ACCESORIOS', 'HERRAMIENTAS', 'OTROS'];
 
@@ -14,9 +15,20 @@ function availability(product) {
   return 'En stock (Por verificar)';
 }
 
-export default function PublicCatalog({ productos, cargando, error, onRecargar }) {
+export default function PublicCatalog({
+  productos,
+  cargando,
+  error,
+  onRecargar,
+  onReservarProducto,
+  bolsa = [],
+  onToggleBolsa,
+  onAbrirBolsa
+}) {
   const [busqueda, setBusqueda] = useState('');
   const [categoria, setCategoria] = useState('');
+
+  const bolsaIds = useMemo(() => new Set(bolsa.map(b => b.id)), [bolsa]);
 
   const visibles = useMemo(() => productos.filter(p => {
     const text = `${p.nombre || ''} ${p.marca || ''} ${p.serie || ''}`.toLowerCase();
@@ -30,8 +42,28 @@ export default function PublicCatalog({ productos, cargando, error, onRecargar }
           <h2>Catálogo de productos</h2>
           <p className="muted">Explora el catálogo disponible de Leveling Jump con disponibilidad de stock en tiempo real.</p>
         </div>
-        <button className="secondary" type="button" onClick={onRecargar}>Actualizar lista</button>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          {bolsa.length > 0 && (
+            <button
+              type="button"
+              className="primary"
+              onClick={onAbrirBolsa}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                background: 'var(--color-cyan)',
+                color: '#080B0F',
+                boxShadow: '0 0 12px var(--color-cyan-glow)'
+              }}
+            >
+              <span>🛒</span> Ver Bolsa ({bolsa.length})
+            </button>
+          )}
+          <button className="secondary" type="button" onClick={onRecargar}>Actualizar lista</button>
+        </div>
       </div>
+
       <div className="filters">
         <input
           value={busqueda}
@@ -46,6 +78,7 @@ export default function PublicCatalog({ productos, cargando, error, onRecargar }
           ))}
         </select>
       </div>
+
       {cargando && <p>Cargando catálogo en vivo…</p>}
       {error && <div className="alert err">{error}</div>}
       {!cargando && !error && visibles.length === 0 && (
@@ -54,10 +87,13 @@ export default function PublicCatalog({ productos, cargando, error, onRecargar }
           <span>Prueba buscando con otro término o seleccionando otra categoría.</span>
         </div>
       )}
+
       <div className="product-grid">
         {visibles.map(p => {
           const avail = availability(p);
           const isAvail = avail.toLowerCase().includes('en stock');
+          const estaEnBolsa = bolsaIds.has(p.id);
+
           return (
             <article className="product-card" key={p.id}>
               {p.imagenUrl ? (
@@ -71,15 +107,84 @@ export default function PublicCatalog({ productos, cargando, error, onRecargar }
                 <p>{p.marca || 'Marca no especificada'}{p.serie ? ` · ${p.serie}` : ''}</p>
                 <div className="product-bottom">
                   <strong>{p.precio != null ? `S/ ${Number(p.precio).toFixed(2)}` : 'Precio por confirmar'}</strong>
-                  <span className={`availability ${isAvail ? 'available' : ''}`}>
-                    {avail}
-                  </span>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', gap: '6px' }}>
+                    <span className={`availability ${isAvail ? 'available' : ''}`}>
+                      {avail}
+                    </span>
+                    {(() => {
+                      const pol = reservaPoliticaService.obtenerPoliticaProducto(p.id);
+                      if (pol.modo === 'PAGO_TOTAL') {
+                        return <span style={{ fontSize: '11px', color: '#D97706', fontWeight: 'bold' }}>⭐ Pago 100%</span>;
+                      }
+                      if (pol.modo === 'CINCUENTA_TOTAL') {
+                        return <span style={{ fontSize: '11px', color: '#0284C7', fontWeight: 'bold' }}>💡 Mín. 50%</span>;
+                      }
+                      return <span style={{ fontSize: '11px', color: '#059669', fontWeight: 'bold' }}>🔖 Mín. {pol.p1 || 20}%</span>;
+                    })()}
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+                  <button
+                    type="button"
+                    className="primary"
+                    style={{ flex: 1, padding: '8px 10px', fontSize: '12.5px' }}
+                    onClick={() => onReservarProducto && onReservarProducto(p)}
+                  >
+                    🔖 Reservar
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary"
+                    style={{
+                      padding: '8px 12px',
+                      fontSize: '12.5px',
+                      whiteSpace: 'nowrap',
+                      borderColor: estaEnBolsa ? 'var(--color-cyan)' : undefined,
+                      color: estaEnBolsa ? 'var(--color-cyan)' : undefined,
+                      background: estaEnBolsa ? 'rgba(0, 210, 238, 0.12)' : undefined,
+                      fontWeight: estaEnBolsa ? 'bold' : 'normal'
+                    }}
+                    onClick={() => onToggleBolsa && onToggleBolsa(p)}
+                    title={estaEnBolsa ? 'Quitar de la bolsa de reserva' : 'Añadir a la bolsa de reserva múltiple'}
+                  >
+                    {estaEnBolsa ? '✓ En Bolsa' : '➕ Bolsa'}
+                  </button>
                 </div>
               </div>
             </article>
           );
         })}
       </div>
+
+      {/* Botón flotante para acceder a la bolsa en cualquier punto de la pantalla */}
+      {bolsa.length > 0 && (
+        <div
+          onClick={onAbrirBolsa}
+          style={{
+            position: 'fixed',
+            bottom: '24px',
+            right: '24px',
+            background: 'var(--color-cyan)',
+            color: '#080B0F',
+            padding: '12px 20px',
+            borderRadius: '30px',
+            fontWeight: 'bold',
+            fontSize: '14px',
+            boxShadow: '0 8px 24px rgba(0, 210, 238, 0.45)',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            zIndex: 999,
+            transition: 'all 0.2s ease',
+            border: '2px solid #FFFFFF'
+          }}
+        >
+          <span style={{ fontSize: '18px' }}>🛒</span>
+          <span>Bolsa de Reserva ({bolsa.length} {bolsa.length === 1 ? 'kit' : 'kits'})</span>
+        </div>
+      )}
     </section>
   );
 }

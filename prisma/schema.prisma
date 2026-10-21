@@ -1,6 +1,7 @@
 // schema.prisma - Leveling Jump Database Schema
-// Sprint 1: HU-03 (Catálogo de Productos) y HU-04 (Lotes e Inventario)
-// Desarrollador Responsable: Cesar Sanchez (Backend & Database Modeling)
+// Sprint 1: HU-01 (Catálogo Público), HU-03 (Catálogo Admin) y HU-04 (Lotes e Inventario)
+// Sprint 2: HU-11 (Autenticación por Rol), HU-12 (Fechas de Lote), HU-13 (Alerta Precio/Costo) y HU-06 (Reservas con Adelanto)
+// Desarrollador Responsable: Cesar Sanchez (Backend, Database Modeling & Integration)
 
 generator client {
   provider = "prisma-client-js"
@@ -10,6 +11,42 @@ datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
+}
+
+// ----------------------------------------------------
+// HU-11: CONTROL DE ACCESO, ROLES Y AUTENTICACIÓN
+// ----------------------------------------------------
+enum RolUsuario {
+  SUPERADMIN     // Dueño de Leveling Jump: control total, crea admins, no puede ser eliminado
+  ADMIN          // Miembros de staff: gestión de inventario, catálogo y reservas
+  CLIENTE        // Comprador web o ferias: consultas y reservas de kits
+}
+
+enum MetodoRegistro {
+  LOCAL          // Correo + Contraseña (requiere verificación OTP)
+  GOOGLE         // Google OAuth (correo verificado automáticamente)
+}
+
+model Usuario {
+  id                 Int            @id @default(autoincrement()) @map("id_usuario")
+  nombre             String         @map("nombre_completo") @db.VarChar(150)
+  email              String         @unique @map("correo_electronico") @db.VarChar(150)
+  passwordHash       String?        @map("password_hash") @db.VarChar(255) // Null si entra con Google
+  rol                RolUsuario     @default(CLIENTE) @map("rol_usuario")
+  metodoRegistro     MetodoRegistro @default(LOCAL) @map("metodo_registro")
+  emailVerificado    Boolean        @default(false) @map("email_verificado")
+  codigoVerificacion String?        @map("codigo_verificacion") @db.VarChar(10)
+  expiracionCodigo   DateTime?      @map("expiracion_codigo")
+  telefono           String?        @map("telefono_contacto") @db.VarChar(25)
+  permisosModulos    Json?          @map("permisos_modulos") // Configurable por Superadmin: ["PRODUCTOS", "LOTES", "RESERVAS"]
+  activo             Boolean        @default(true) @map("cuenta_activa")
+  fechaCreacion      DateTime       @default(now()) @map("fecha_creacion")
+  fechaActualizacion DateTime       @updatedAt @map("fecha_actualizacion")
+
+  // Relaciones
+  reservas           Reserva[]
+
+  @@map("usuarios")
 }
 
 // ----------------------------------------------------
@@ -52,8 +89,9 @@ model Producto {
   fechaCreacion    DateTime           @default(now()) @map("fecha_creacion")     // CP-12
   fechaActualizacion DateTime         @updatedAt @map("fecha_actualizacion")     // CP-13
 
-  // Relaciones con HU-04 (Inventario y Unidades Físicas)
+  // Relaciones
   unidadesInventario InventarioUnidad[]
+  reservas           Reserva[]
 
   @@unique([nombre, marca, escala, serie], name: "unique_producto_version") // RN-HU03-05: Prevención de duplicados
   @@index([nombre], name: "idx_producto_nombre")                             // RN-HU03-06: Búsqueda rápida
@@ -63,7 +101,7 @@ model Producto {
 }
 
 // ----------------------------------------------------
-// HU-04: RECEPCIÓN DE LOTES E INVENTARIO POR UNIDAD
+// HU-04 & HU-12: RECEPCIÓN DE LOTES E INVENTARIO POR UNIDAD
 // ----------------------------------------------------
 enum EstadoLote {
   EN_TRANSITO
@@ -80,14 +118,15 @@ enum EstadoUnidadStock {
 }
 
 model LoteIngreso {
-  id               Int                @id @default(autoincrement()) @map("id_lote")
-  codigoLote       String             @unique @map("codigo_lote") @db.VarChar(30) // LOTE-2026-01
-  proveedor        String             @map("proveedor") @db.VarChar(150)
-  fechaLlegada     DateTime?          @map("fecha_llegada")
-  estadoLote       EstadoLote         @default(RECIBIDO) @map("estado_lote")
-  costoFleteTotal  Decimal?           @map("costo_flete_total") @db.Decimal(10, 2)
-  observaciones    String?            @map("observaciones") @db.Text
-  fechaCreacion    DateTime           @default(now()) @map("fecha_creacion")
+  id                 Int                @id @default(autoincrement()) @map("id_lote")
+  codigoLote         String             @unique @map("codigo_lote") @db.VarChar(30) // LOTE-2026-01
+  proveedor          String             @map("proveedor") @db.VarChar(150)
+  documentoReferencia String?           @map("documento_referencia") @db.VarChar(50) // Factura / Boleta / Guía de Remisión
+  fechaLlegada       DateTime?          @map("fecha_llegada")                        // HU-12: Fecha física de arribo
+  estadoLote         EstadoLote         @default(RECIBIDO) @map("estado_lote")
+  costoFleteTotal    Decimal?           @map("costo_flete_total") @db.Decimal(10, 2)
+  observaciones      String?            @map("observaciones") @db.Text
+  fechaCreacion      DateTime           @default(now()) @map("fecha_creacion")       // HU-12: Fecha de registro inmutable en sistema
 
   unidadesInventario InventarioUnidad[]
 
@@ -100,12 +139,56 @@ model InventarioUnidad {
   idLote           Int?               @map("id_lote")
   codigoSerie      String             @unique @map("codigo_serie_unitario") @db.VarChar(50) // LJ-ITEM-0001
   estadoStock      EstadoUnidadStock  @default(DISPONIBLE) @map("estado_stock") // CP-11 cálculo dinámico
-  costoUnitario    Decimal?           @map("costo_adquisicion") @db.Decimal(10, 2)
+  costoUnitario    Decimal?           @map("costo_adquisicion") @db.Decimal(10, 2) // HU-13: Base para validar margen
   fechaIngreso     DateTime           @default(now()) @map("fecha_ingreso")
 
   producto         Producto           @relation(fields: [idProducto], references: [id], onDelete: Restrict)
   lote             LoteIngreso?       @relation(fields: [idLote], references: [id], onDelete: SetNull)
+  reserva          Reserva?
 
   @@index([idProducto, estadoStock], name: "idx_inventario_disp")
   @@map("inventario_unidades")
+}
+
+// ----------------------------------------------------
+// HU-06: SISTEMA DE RESERVAS CON ADELANTO MANUAL
+// ----------------------------------------------------
+enum EstadoReserva {
+  PENDIENTE       // Registrada a la espera de confirmación de pago o retiro
+  CONFIRMADA      // Con adelanto verificado / asegurada para feria o envío
+  ENTREGADA       // Pagada en su totalidad y entregada al comprador
+  CANCELADA       // Anulada por el cliente o por el staff
+  EXPIRADA        // Excedió el tiempo límite sin retiro
+}
+
+model Reserva {
+  id                 Int              @id @default(autoincrement()) @map("id_reserva")
+  codigoSeguimiento  String           @unique @map("codigo_seguimiento") @db.VarChar(30) // RES-2026-0001
+  idProducto         Int              @map("id_producto")
+  idUnidad           Int?             @unique @map("id_unidad_inventario") // Unidad física reservada
+  idUsuario          Int?             @map("id_usuario") // Cliente registrado (opcional)
+
+  // Datos de contacto del cliente
+  nombreCliente      String           @map("nombre_cliente") @db.VarChar(150)
+  telefonoCliente    String           @map("telefono_cliente") @db.VarChar(25)
+  emailCliente       String?          @map("email_cliente") @db.VarChar(150)
+
+  // Desglose económico de la reserva (Adelanto manual flexible)
+  montoTotal         Decimal          @map("monto_total") @db.Decimal(10, 2)
+  montoAdelanto      Decimal          @default(0) @map("monto_adelanto") @db.Decimal(10, 2)
+  saldoPendiente     Decimal          @map("saldo_pendiente") @db.Decimal(10, 2) // total - adelanto
+
+  estadoReserva      EstadoReserva    @default(PENDIENTE) @map("estado_reserva")
+  notas              String?          @map("notas") @db.Text // Ej: "Retiro en feria sábado / TikTok live"
+  fechaReserva       DateTime         @default(now()) @map("fecha_reserva")
+  fechaLimite        DateTime?        @map("fecha_limite_retiro")
+
+  // Relaciones
+  producto           Producto         @relation(fields: [idProducto], references: [id], onDelete: Restrict)
+  unidadInventario   InventarioUnidad? @relation(fields: [idUnidad], references: [id], onDelete: SetNull)
+  usuario            Usuario?         @relation(fields: [idUsuario], references: [id], onDelete: SetNull)
+
+  @@index([idProducto], name: "idx_reserva_producto")
+  @@index([estadoReserva], name: "idx_reserva_estado")
+  @@map("reservas")
 }

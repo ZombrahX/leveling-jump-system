@@ -61,15 +61,27 @@ const obtenerProductos = async (req, res) => {
                             where: { estadoStock: 'DISPONIBLE' }
                         }
                     }
+                },
+                unidadesInventario: {
+                    select: { costoUnitario: true },
+                    where: { costoUnitario: { not: null } },
+                    orderBy: { id: 'desc' },
+                    take: 1
                 }
             },
             orderBy: { id: 'desc' }
         });
 
-        const productosConStock = productos.map(p => ({
-            ...p,
-            stockDisponible: p._count ? p._count.unidadesInventario : 0
-        }));
+        const productosConStock = productos.map(p => {
+            const ultimoCosto = p.unidadesInventario && p.unidadesInventario.length > 0
+                ? Number(p.unidadesInventario[0].costoUnitario)
+                : null;
+            return {
+                ...p,
+                stockDisponible: p._count ? p._count.unidadesInventario : 0,
+                costoReferencia: ultimoCosto
+            };
+        });
 
         return res.status(200).json({
             total: productosConStock.length,

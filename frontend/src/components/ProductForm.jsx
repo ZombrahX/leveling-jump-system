@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { reservaPoliticaService, MODOS_POLITICA } from '../services/reservaPoliticaService';
 
 const categorias = ['MODEL_KITS', 'FIGURAS', 'ACCESORIOS', 'HERRAMIENTAS', 'OTROS'];
 const escalas = ['ESCALA_1_144', 'ESCALA_1_100', 'ESCALA_1_60', 'SIN_ESCALA', 'NO_APLICA'];
@@ -32,6 +33,7 @@ export default function ProductForm({ initialData, isEditing, onSubmit, onCancel
   const [form, setForm] = useState(initialData);
   const [marcaPersonalizada, setMarcaPersonalizada] = useState('');
   const [seriePersonalizada, setSeriePersonalizada] = useState('');
+  const [politicaReserva, setPoliticaReserva] = useState(MODOS_POLITICA.ESTANDAR);
 
   useEffect(() => {
     setForm(initialData);
@@ -40,6 +42,13 @@ export default function ProductForm({ initialData, isEditing, onSubmit, onCancel
     }
     if (initialData.serie && !seriesComunes.includes(initialData.serie)) {
       setSeriePersonalizada(initialData.serie);
+    }
+    if (initialData.id) {
+      const pol = reservaPoliticaService.obtenerPoliticaProducto(initialData.id);
+      setPoliticaReserva(pol.modo || MODOS_POLITICA.ESTANDAR);
+    } else {
+      const global = reservaPoliticaService.obtenerPoliticaGlobal();
+      setPoliticaReserva(global.modo || MODOS_POLITICA.ESTANDAR);
     }
   }, [initialData]);
 
@@ -82,7 +91,8 @@ export default function ProductForm({ initialData, isEditing, onSubmit, onCancel
       marca: marcaFinal,
       precio: Number(form.precio),
       imagenUrl: imagenFinal,
-      estado: form.estado || 'ACTIVO'
+      estado: form.estado || 'ACTIVO',
+      politicaReserva
     });
   };
 
@@ -227,7 +237,7 @@ export default function ProductForm({ initialData, isEditing, onSubmit, onCancel
 
         <div className="two">
           <label>
-            Precio (S/) *
+            Precio de venta al público (S/) *
             <input
               name="precio"
               type="number"
@@ -249,6 +259,39 @@ export default function ProductForm({ initialData, isEditing, onSubmit, onCancel
             </select>
           </label>
         </div>
+
+        <label>
+          Condición de Reserva Comercial *
+          <select
+            name="politicaReserva"
+            value={politicaReserva}
+            onChange={e => setPoliticaReserva(e.target.value)}
+          >
+            <option value={MODOS_POLITICA.ESTANDAR}>
+              Caso 1: Flexible / Estándar (3 tramos: Mínimo configurable, Intermedio y Total)
+            </option>
+            <option value={MODOS_POLITICA.CINCUENTA_TOTAL}>
+              Caso 2: Económico (2 tramos: Mínimo 50% y Total 100%)
+            </option>
+            <option value={MODOS_POLITICA.PAGO_TOTAL}>
+              Caso 3: Exclusivo / Especial (1 tramo: Solo 100% Pago Total)
+            </option>
+          </select>
+        </label>
+
+        {/* Alerta de precio menor al costo de adquisición */}
+        {(form.costoReferencia || initialData.costoReferencia) && Number(form.precio) > 0 && Number(form.precio) < Number(form.costoReferencia || initialData.costoReferencia) && (
+          <div className="alert-margin-warning">
+            <span style={{ fontSize: '20px', lineHeight: 1 }}>⚠️</span>
+            <div>
+              <strong style={{ color: '#F87171' }}>Alerta de Margen Negativo:</strong>
+              <div style={{ marginTop: '2px', fontSize: '12.5px', color: '#FEE2E2' }}>
+                El precio fijado (<strong>S/ {Number(form.precio).toFixed(2)}</strong>) es menor al costo de adquisición registrado (<strong>S/ {Number(form.costoReferencia || initialData.costoReferencia).toFixed(2)}</strong>).
+                Margen negativo: <strong style={{ color: '#EF4444' }}>- S/ {(Number(form.costoReferencia || initialData.costoReferencia) - Number(form.precio)).toFixed(2)}</strong> por unidad.
+              </div>
+            </div>
+          </div>
+        )}
 
         <label>
           URL de imagen (opcional)

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { reservaPoliticaService } from '../services/reservaPoliticaService';
 
 export default function ProductList({
   productos,
@@ -114,12 +115,18 @@ export default function ProductList({
                     {p.serie && <small style={{ display: 'block', color: '#6b7280' }}>{p.serie}</small>}
                   </td>
                   <td>{p.categoria ? p.categoria.replaceAll('_', ' ') : '-'}</td>
-                  <td>{p.marca}</td>
-                  <td><strong>S/ {Number(p.precio).toFixed(2)}</strong></td>
                   <td>
-                    <span className={`status-badge ${p.estado === 'ACTIVO' ? 'active' : 'inactive'}`}>
-                      {p.estado}
-                    </span>
+                    <strong>S/ {Number(p.precio).toFixed(2)}</strong>
+                    {(() => {
+                      const pol = reservaPoliticaService.obtenerPoliticaProducto(p.id);
+                      if (pol.modo === 'PAGO_TOTAL') {
+                        return <small style={{ display: 'block', color: '#D97706', fontWeight: 'bold' }}>⭐ Pago 100%</small>;
+                      }
+                      if (pol.modo === 'CINCUENTA_TOTAL') {
+                        return <small style={{ display: 'block', color: '#0284C7', fontWeight: 'bold' }}>💡 Mínimo 50%</small>;
+                      }
+                      return <small style={{ display: 'block', color: '#6B7280' }}>🔖 Mín. {pol.p1 || 20}%</small>;
+                    })()}
                   </td>
                   <td>
                     <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>

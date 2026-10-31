@@ -13,6 +13,11 @@ const registrarProducto = async (req, res) => {
             });
         }
 
+        const precioNum = parseFloat(precio);
+        if (isNaN(precioNum) || precioNum <= 0) {
+            return res.status(400).json({ error: "El precio debe ser un número mayor a 0." });
+        }
+
         const nuevoProducto = await prisma.producto.create({
             data: {
                 codigo,
@@ -21,7 +26,7 @@ const registrarProducto = async (req, res) => {
                 categoria: categoria || 'MODEL_KITS',
                 escala: escala || 'NO_APLICA',
                 marca,
-                precio: parseFloat(precio),
+                precio: precioNum,
                 imagenUrl: imagenUrl || ''
             }
         });
@@ -116,12 +121,6 @@ const obtenerProductoPorId = async (req, res) => {
     }
 };
 
-module.exports = {
-    registrarProducto,
-    obtenerProductos,
-    obtenerProductoPorId
-};
-
 // PTLJ-16: Actualizar un producto existente en el catálogo
 const actualizarProducto = async (req, res) => {
     try {
@@ -135,6 +134,27 @@ const actualizarProducto = async (req, res) => {
 
         if (!productoExistente) {
             return res.status(404).json({ error: "Producto no encontrado para actualizar." });
+        }
+
+        // P06: HU-13 / CA1 - Validar que el nuevo precio no sea menor al costo de adquisición registrado
+        if (precio !== undefined) {
+            const precioNum = parseFloat(precio);
+            const unidadConCosto = await prisma.inventarioUnidad.findFirst({
+                where: {
+                    idProducto: parseInt(id),
+                    costoUnitario: { not: null }
+                },
+                orderBy: { id: 'desc' }
+            });
+
+            if (unidadConCosto && unidadConCosto.costoUnitario) {
+                const costoNum = parseFloat(unidadConCosto.costoUnitario);
+                if (precioNum < costoNum) {
+                    return res.status(400).json({
+                        error: `No se puede guardar un precio de venta (S/ ${precioNum.toFixed(2)}) inferior al costo de adquisición registrado (S/ ${costoNum.toFixed(2)}). Margen negativo no permitido (HU-13 / CA1).`
+                    });
+                }
+            }
         }
 
         // Realizar la actualización con los campos enviados
@@ -168,7 +188,6 @@ const actualizarProducto = async (req, res) => {
     }
 };
 
-// No olvides incluir 'actualizarProducto' en el module.exports al final del archivo:
 module.exports = {
     registrarProducto,
     obtenerProductos,

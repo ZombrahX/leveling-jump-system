@@ -46,8 +46,19 @@ const registrarLoteConUnidades = async (req, res) => {
       ? codigoLote.trim() 
       : `LOT-${new Date().getFullYear()}-${Date.now().toString().slice(-4)}`;
 
-    // HU-12: Fecha física de arribo vs fecha de registro del sistema
-    const fechaLlegadaFinal = fechaLlegada ? new Date(fechaLlegada) : new Date();
+    // HU-12 / P04: Fecha física de arribo vs fecha de registro del sistema
+    // Si viene como YYYY-MM-DD o string, fijar a mediodía UTC (T12:00:00Z) para evitar desfases de zona horaria (UTC-5)
+    let fechaLlegadaFinal = new Date();
+    if (fechaLlegada) {
+      if (typeof fechaLlegada === 'string' && fechaLlegada.includes('T')) {
+        const parte = fechaLlegada.split('T')[0];
+        fechaLlegadaFinal = new Date(`${parte}T12:00:00.000Z`);
+      } else if (typeof fechaLlegada === 'string') {
+        fechaLlegadaFinal = new Date(`${fechaLlegada}T12:00:00.000Z`);
+      } else {
+        fechaLlegadaFinal = new Date(fechaLlegada);
+      }
+    }
 
     // Transacción de Prisma para asegurar integridad ACID
     const resultado = await prisma.$transaction(async (tx) => {

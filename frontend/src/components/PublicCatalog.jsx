@@ -92,6 +92,7 @@ export default function PublicCatalog({
         {visibles.map(p => {
           const avail = availability(p);
           const isAvail = avail.toLowerCase().includes('en stock');
+          const isAgotado = !isAvail || (p.stockDisponible !== undefined && p.stockDisponible <= 0);
           const estaEnBolsa = bolsaIds.has(p.id);
 
           return (
@@ -124,29 +125,41 @@ export default function PublicCatalog({
                   </div>
                 </div>
 
+                {/* P08: Deshabilitar botones de reserva si el producto está agotado */}
                 <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
                   <button
                     type="button"
-                    className="primary"
-                    style={{ flex: 1, padding: '8px 10px', fontSize: '12.5px' }}
-                    onClick={() => onReservarProducto && onReservarProducto(p)}
+                    className={isAgotado ? 'secondary' : 'primary'}
+                    disabled={isAgotado}
+                    style={{
+                      flex: 1,
+                      padding: '8px 10px',
+                      fontSize: '12.5px',
+                      opacity: isAgotado ? 0.55 : 1,
+                      cursor: isAgotado ? 'not-allowed' : 'pointer'
+                    }}
+                    onClick={() => !isAgotado && onReservarProducto && onReservarProducto(p)}
+                    title={isAgotado ? 'Producto agotado. No hay unidades disponibles para reservar (HU-06 / CA2).' : 'Apartar este kit'}
                   >
-                    🔖 Reservar
+                    {isAgotado ? '🚫 Agotado' : '🔖 Reservar'}
                   </button>
                   <button
                     type="button"
                     className="secondary"
+                    disabled={isAgotado}
                     style={{
                       padding: '8px 12px',
                       fontSize: '12.5px',
                       whiteSpace: 'nowrap',
+                      opacity: isAgotado ? 0.4 : 1,
+                      cursor: isAgotado ? 'not-allowed' : 'pointer',
                       borderColor: estaEnBolsa ? 'var(--color-cyan)' : undefined,
                       color: estaEnBolsa ? 'var(--color-cyan)' : undefined,
                       background: estaEnBolsa ? 'rgba(0, 210, 238, 0.12)' : undefined,
                       fontWeight: estaEnBolsa ? 'bold' : 'normal'
                     }}
-                    onClick={() => onToggleBolsa && onToggleBolsa(p)}
-                    title={estaEnBolsa ? 'Quitar de la bolsa de reserva' : 'Añadir a la bolsa de reserva múltiple'}
+                    onClick={() => !isAgotado && onToggleBolsa && onToggleBolsa(p)}
+                    title={isAgotado ? 'Producto agotado. No se puede añadir a la bolsa.' : (estaEnBolsa ? 'Quitar de la bolsa de reserva' : 'Añadir a la bolsa de reserva múltiple')}
                   >
                     {estaEnBolsa ? '✓ En Bolsa' : '➕ Bolsa'}
                   </button>

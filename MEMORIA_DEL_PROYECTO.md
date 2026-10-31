@@ -315,4 +315,33 @@ En este Sprint se abordaron los requerimientos críticos de seguridad, negocio y
 | **UX & Frontend** | **Navegación Empresarial:** Menús desplegables sin desbordes horizontales. | **100% CUMPLIDO** | `App.jsx`, `index.css`, menús agrupados (*Catálogo*, *Almacén*, *Ventas*, *Admin*). |
 | **UX & Frontend** | **Pulido para Sustentación:** Erradicación de siglas HU en UI y textos comerciales formales. | **100% CUMPLIDO** | Limpieza total de etiquetas técnicas en todas las vistas de usuario. |
 
+---
+
+## 10. Bitácora de Resolución de Incidencias QA Externo (Auditoría Demo 2)
+
+A partir del informe formal de pruebas de calidad (*Leveling_Jump_Incidencias_Demo_2.docx.pdf*), se atendieron y corrigieron al 100% los 8 hallazgos identificados:
+
+1. **P01 — Registro local y verificación de correo (OTP):**
+   * *Causa:* En entornos de evaluación local donde se clona el repositorio sin archivo `.env` configurado, Nodemailer arrojaba `Missing credentials for "PLAIN"`.
+   * *Corrección:* `emailService.js` ahora detecta la presencia de credenciales SMTP y, en caso de ausencia o fallo de transporte en desarrollo, imprime el código OTP de forma legible en la consola del servidor (`[DEV MODE OTP]`) permitiendo continuar la verificación sin interrumpir el flujo. Se actualizó `.env.example` con las variables completas.
+2. **P02 — API de reservas protegida contra accesos no autorizados (CRÍTICA):**
+   * *Causa:* La ruta `GET /api/reservas` carecía de los middlewares de autorización.
+   * *Corrección:* Se aseguró el endpoint con `verificarToken` y `requerirRol(['SUPERADMIN', 'ADMIN'])`. Consultas anónimas reciben `401 Unauthorized`; usuarios `CLIENTE` reciben `403 Forbidden`. Los clientes solo pueden consultar sus reservas en `GET /api/reservas/mis-reservas`.
+3. **P03 — Validación de correos válidos y rechazo de dominios temporales:**
+   * *Corrección:* Se implementó validación de formato RFC estricto y un filtro de rechazo para dominios temporales/desechables conocidos (`mailinator.com`, `tempmail.com`, etc.) en `authController.js`.
+4. **P04 — Corrección de desfase de fecha en llegada física de lotes:**
+   * *Causa:* Desfase de zona horaria (UTC vs UTC-5 Perú) al convertir strings `"YYYY-MM-DD"` con `toLocaleDateString()`.
+   * *Corrección:* `ReceptionForm.jsx` implementa `formatearFechaLlegada()` extrayendo los componentes de calendario exactos, y el backend normaliza la hora a mediodía UTC (`T12:00:00Z`).
+5. **P05 — Desglose explícito en la Alerta de Margen Negativo (CA1):**
+   * *Causa:* Texto con bajo contraste (`#FEE2E2`) sobre el fondo claro del formulario.
+   * *Corrección:* Rediseño con contraste legible en modo claro y desglose detallado de los 3 valores: Precio de Venta Propuesto, Costo Unitario de Adquisición (Lote) y Margen Negativo resultante por unidad.
+6. **P06 — Bloqueo estricto al guardar productos con precio inferior al costo:**
+   * *Corrección:* Implementado en frontend (`ProductForm.jsx`) deshabilitando el botón de guardado y emitiendo alerta modal, y reforzado en backend (`productController.js`) con respuesta `400 Bad Request` si `precio < costoUnitario`.
+7. **P07 — Advertencia de margen negativo en recepción de lotes (CA2 / PTLJ-82):**
+   * *Corrección:* En `ReceptionForm.jsx`, si el costo unitario del lote supera el precio vigente del producto seleccionado, se despliega una advertencia ámbar con el desglose de valores antes de confirmar la recepción (sin bloquear la entrada física).
+8. **P08 — Control atómico de stock y rechazo de reservas de productos agotados:**
+   * *Causa:* El backend permitía crear reservas con `idUnidad = null` cuando el stock era cero.
+   * *Corrección:* `reservaController.js` ahora exige atómicamente una unidad en estado `DISPONIBLE` dentro de una transacción `$transaction`. Si el producto no tiene unidades, rechaza la operación con `400 Bad Request`. En frontend, `PublicCatalog.jsx`, `ReservationModal.jsx` y `MultiReservationModal.jsx` bloquean y deshabilitan los botones de reserva y bolsa cuando el producto está agotado (`🚫 Agotado`).
+
+
 

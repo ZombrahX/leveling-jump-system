@@ -14,8 +14,8 @@ router.post('/reservas', crearReserva);
 // Endpoint protegido para que el cliente consulte sus propias reservas
 router.get('/reservas/mis-reservas', verificarToken, obtenerMisReservas);
 
-// Endpoints de gestión de reservas para Staff
-router.get('/reservas', obtenerReservas);
+// Endpoints de gestión de reservas protegidos para Staff (SUPERADMIN y ADMIN)
+router.get('/reservas', verificarToken, requerirRol(['SUPERADMIN', 'ADMIN']), obtenerReservas);
 router.patch('/reservas/:id/estado', verificarToken, requerirRol(['SUPERADMIN', 'ADMIN']), actualizarEstadoReserva);
 
 module.exports = router;

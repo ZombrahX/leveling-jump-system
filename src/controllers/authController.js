@@ -25,6 +25,26 @@ const registro = async (req, res) => {
     }
 
     const emailNormalizado = email.trim().toLowerCase();
+
+    // P03: Validación de formato de correo RFC
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!emailRegex.test(emailNormalizado)) {
+      return res.status(400).json({ error: 'El formato del correo electrónico no es válido.' });
+    }
+
+    // P03: Rechazo de proveedores de correo temporal o desechable
+    const dominiosDesechables = [
+      'tempmail.com', '10minutemail.com', 'mailinator.com', 'guerrillamail.com',
+      'yopmail.com', 'trashmail.com', 'dispostable.com', 'sharklasers.com',
+      'temp-mail.org', 'fakeinbox.com', 'getnada.com', 'mohmal.com'
+    ];
+    const dominioCorreo = emailNormalizado.split('@')[1];
+    if (dominiosDesechables.includes(dominioCorreo)) {
+      return res.status(400).json({
+        error: 'Por motivos de seguridad no se permiten correos temporales o desechables. Utiliza un correo válido.'
+      });
+    }
+
     const codigoOtp = Math.floor(100000 + Math.random() * 900000).toString();
     const expiracion = new Date(Date.now() + 15 * 60 * 1000); // 15 minutos
     const passwordHash = await bcrypt.hash(password, 10);

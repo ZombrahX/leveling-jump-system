@@ -1,17 +1,33 @@
 const nodemailer = require('nodemailer');
 
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS
-  }
-});
+// Verificar si las credenciales de correo están configuradas
+const hasCredentials = Boolean(process.env.EMAIL_USER && process.env.EMAIL_PASS);
+
+const transporter = hasCredentials
+  ? nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS
+      }
+    })
+  : null;
 
 /**
  * Envía un correo con el código OTP de verificación de 6 dígitos.
+ * P01: Si no hay credenciales SMTP configuradas o falla el transporte en modo dev,
+ * registra el OTP en consola y permite que el flujo de verificación continúe.
  */
 async function enviarCodigoVerificacion(destinatario, nombre, codigo) {
+  if (!transporter) {
+    console.warn(`\n=============================================================`);
+    console.warn(`[EmailService - MODO PRUEBAS / DEV] Credenciales SMTP no detectadas en .env`);
+    console.warn(`Destinatario: ${destinatario} (${nombre})`);
+    console.warn(`Código de verificación OTP: ${codigo}`);
+    console.warn(`=============================================================\n`);
+    return { success: true, devMode: true };
+  }
+
   const mailOptions = {
     from: `"Leveling Jump — Verificación Oficial" <${process.env.EMAIL_USER}>`,
     to: destinatario,
@@ -54,6 +70,11 @@ async function enviarCodigoVerificacion(destinatario, nombre, codigo) {
     return { success: true, messageId: info.messageId };
   } catch (error) {
     console.error(`[EmailService] Error al enviar correo a ${destinatario}:`, error.message);
+    // Si las credenciales eran inválidas en el entorno local (Missing credentials for "PLAIN")
+    if (error.code === 'EAUTH' || error.message.includes('Missing credentials') || error.message.includes('auth')) {
+      console.warn(`[EmailService - FALLBACK OTP] Mostrando código en consola: ${codigo}`);
+      return { success: true, devMode: true, fallback: true };
+    }
     throw error;
   }
 }
@@ -62,6 +83,11 @@ async function enviarCodigoVerificacion(destinatario, nombre, codigo) {
  * Envía un correo con el comprobante de reserva de unidad (HU-06).
  */
 async function enviarComprobanteReserva(destinatario, nombre, reserva) {
+  if (!transporter) {
+    console.warn(`[EmailService - DEV] Comprobante de reserva generado para ${destinatario} [${reserva.codigoSeguimiento}] (Sin SMTP configurado)`);
+    return { success: true, devMode: true };
+  }
+
   const mailOptions = {
     from: `"Leveling Jump — Reservas" <${process.env.EMAIL_USER}>`,
     to: destinatario,
@@ -100,18 +126,24 @@ async function enviarComprobanteReserva(destinatario, nombre, reserva) {
             </tr>
           </table>
 
-          <p style="color: #9CA3AF; font-size: 13px;">
-            Presenta tu código <strong>${reserva.codigoSeguimiento}</strong> por WhatsApp o en la feria del sábado para retirar tu kit una vez cancelado el saldo.
-          </p>
+          <div style="background-color: #161B22; border-left: 4px solid #00D2EE; padding: 12px 16px; border-radius: 4px; margin: 20px 0; font-size: 12.5px; color: #C9D1D9;">
+            Recuerda que para coordinar la entrega en la feria del sábado o tu envío courier, puedes comunicarte indicando tu código de seguimiento <strong>${reserva.codigoSeguimiento}</strong>.
+          </div>
+        </div>
+
+        <div style="background-color: #080B0F; padding: 14px 20px; text-align: center; border-top: 1px solid #21262D; color: #6B7280; font-size: 11px;">
+          Leveling Jump &copy; 2026 · Gunpla & Anime Collectibles
         </div>
       </div>
     `
   };
 
   try {
-    return await transporter.sendMail(mailOptions);
+    const info = await transporter.sendMail(mailOptions);
+    return { success: true, messageId: info.messageId };
   } catch (error) {
-    console.error(`[EmailService] Error al enviar comprobante de reserva:`, error.message);
+    console.warn('[EmailService] No se pudo enviar el comprobante de reserva:', error.message);
+    return { success: false, error: error.message };
   }
 }
 

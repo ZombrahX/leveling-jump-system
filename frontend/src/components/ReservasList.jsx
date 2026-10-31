@@ -16,7 +16,7 @@ export default function ReservasList({ token }) {
       const res = await reservaService.obtenerReservas({
         estado: filtroEstado || undefined,
         busqueda: busqueda.trim() || undefined
-      });
+      }, token);
       setReservas(res.reservas || []);
     } catch (err) {
       setError(err.message || 'No se pudieron cargar las reservas.');
@@ -27,7 +27,7 @@ export default function ReservasList({ token }) {
 
   useEffect(() => {
     cargar();
-  }, [filtroEstado, busqueda]);
+  }, [filtroEstado, busqueda, token]);
 
   const handleCambiarEstado = async (id, nuevoEstado) => {
     try {

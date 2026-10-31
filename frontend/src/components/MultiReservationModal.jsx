@@ -101,6 +101,13 @@ export default function MultiReservationModal({
       return;
     }
 
+    // P08: Validar que ningún producto en la bolsa esté agotado
+    const itemsAgotados = items.filter(it => it.stockDisponible !== undefined && it.stockDisponible <= 0);
+    if (itemsAgotados.length > 0) {
+      setError(`No se puede procesar la reserva múltiple: los siguientes kits están agotados: ${itemsAgotados.map(it => it.nombre).join(', ')}. Retíralos de la bolsa para continuar.`);
+      return;
+    }
+
     if (!nombre.trim()) {
       setError('Por favor ingresa el nombre del comprador.');
       return;

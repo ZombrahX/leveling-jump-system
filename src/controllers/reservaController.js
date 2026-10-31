@@ -61,9 +61,9 @@ const crearReserva = async (req, res) => {
     const codigoSeguimiento = generarCodigoSeguimiento();
     const estadoInicial = adelanto > 0 ? 'CONFIRMADA' : 'PENDIENTE';
 
-    // Transacción ACID para asegurar asignación de inventario si hay stock disponible
+    // Transacción ACID para asegurar asignación atómica de inventario (P08 / HU-06 CA2)
     const resultado = await prisma.$transaction(async (tx) => {
-      // Buscar si hay unidad física disponible en inventario
+      // P08: Buscar si hay unidad física disponible en inventario
       const unidadDisponible = await tx.inventarioUnidad.findFirst({
         where: {
           idProducto: parseInt(idProducto),
@@ -71,22 +71,30 @@ const crearReserva = async (req, res) => {
         }
       });
 
-      let unidadReservadaId = null;
-      if (unidadDisponible) {
-        unidadReservadaId = unidadDisponible.id;
-        // Apartar la unidad física
-        await tx.inventarioUnidad.update({
-          where: { id: unidadDisponible.id },
-          data: { estadoStock: 'RESERVADO' }
-        });
+      // P08: Si no hay unidad disponible, rechazar la reserva de inmediato
+      if (!unidadDisponible) {
+        throw new Error('PRODUCTO_AGOTADO');
       }
 
-      // Crear la reserva
+      // P08: Apartar la unidad física de forma atómica para evitar sobreventa concurrente
+      const asignacion = await tx.inventarioUnidad.updateMany({
+        where: {
+          id: unidadDisponible.id,
+          estadoStock: 'DISPONIBLE'
+        },
+        data: { estadoStock: 'RESERVADO' }
+      });
+
+      if (asignacion.count === 0) {
+        throw new Error('PRODUCTO_AGOTADO');
+      }
+
+      // Crear la reserva vinculada obligatoriamente a la unidad física
       const nuevaReserva = await tx.reserva.create({
         data: {
           codigoSeguimiento,
           idProducto: parseInt(idProducto),
-          idUnidad: unidadReservadaId,
+          idUnidad: unidadDisponible.id,
           idUsuario: idUsuario ? parseInt(idUsuario) : null,
           nombreCliente: nombreCliente.trim(),
           telefonoCliente: telefonoCliente.trim(),
@@ -127,6 +135,11 @@ const crearReserva = async (req, res) => {
     });
 
   } catch (error) {
+    if (error.message === 'PRODUCTO_AGOTADO') {
+      return res.status(400).json({
+        error: 'El producto se encuentra agotado. No quedan unidades físicas disponibles para reservar (HU-06 / CA2).'
+      });
+    }
     console.error('[ReservaController.crearReserva] Error:', error);
     return res.status(500).json({ error: 'Error al registrar la reserva: ' + error.message });
   }

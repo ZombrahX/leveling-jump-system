@@ -59,6 +59,11 @@ export default function ProductForm({ initialData, isEditing, onSubmit, onCancel
     setForm({ ...form, codigo: `LJ-${random}` });
   };
 
+  const costoRef = Number(form.costoReferencia || initialData.costoReferencia || 0);
+  const precioNum = Number(form.precio) || 0;
+  const esMargenNegativo = costoRef > 0 && precioNum > 0 && precioNum < costoRef;
+  const diferenciaMargen = costoRef - precioNum;
+
   const submit = e => {
     e.preventDefault();
     const faltantes = [];
@@ -73,6 +78,12 @@ export default function ProductForm({ initialData, isEditing, onSubmit, onCancel
 
     if (faltantes.length) {
       alert(`Por favor completa los campos obligatorios: ${faltantes.join(', ')}.`);
+      return;
+    }
+
+    // P06: Bloquear guardado si el precio de venta es menor al costo de adquisición (HU-13 / CA1)
+    if (esMargenNegativo) {
+      alert(`⚠️ Acción Bloqueada (HU-13 / CA1):\nEl precio de venta (S/ ${precioNum.toFixed(2)}) no puede ser inferior al costo de adquisición registrado (S/ ${costoRef.toFixed(2)}).\nMargen negativo: -S/ ${diferenciaMargen.toFixed(2)} por unidad.\n\nPor política comercial, debes asignar un precio igual o superior al costo.`);
       return;
     }
 
@@ -279,16 +290,32 @@ export default function ProductForm({ initialData, isEditing, onSubmit, onCancel
           </select>
         </label>
 
-        {/* Alerta de precio menor al costo de adquisición */}
-        {(form.costoReferencia || initialData.costoReferencia) && Number(form.precio) > 0 && Number(form.precio) < Number(form.costoReferencia || initialData.costoReferencia) && (
-          <div className="alert-margin-warning">
-            <span style={{ fontSize: '20px', lineHeight: 1 }}>⚠️</span>
-            <div>
-              <strong style={{ color: '#F87171' }}>Alerta de Margen Negativo:</strong>
-              <div style={{ marginTop: '2px', fontSize: '12.5px', color: '#FEE2E2' }}>
-                El precio fijado (<strong>S/ {Number(form.precio).toFixed(2)}</strong>) es menor al costo de adquisición registrado (<strong>S/ {Number(form.costoReferencia || initialData.costoReferencia).toFixed(2)}</strong>).
-                Margen negativo: <strong style={{ color: '#EF4444' }}>- S/ {(Number(form.costoReferencia || initialData.costoReferencia) - Number(form.precio)).toFixed(2)}</strong> por unidad.
-              </div>
+        {/* P05 & P06: Alerta de precio menor al costo con desglose explícito (CA1 - HU-13) */}
+        {esMargenNegativo && (
+          <div style={{
+            background: '#FEF2F2',
+            border: '1px solid #EF4444',
+            color: '#991B1B',
+            padding: '14px 18px',
+            borderRadius: '8px',
+            margin: '14px 0',
+            lineHeight: 1.5,
+            fontSize: '13px'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 'bold', fontSize: '14px', color: '#B91C1C', marginBottom: '8px' }}>
+              <span style={{ fontSize: '18px' }}>⚠️</span>
+              <span>Alerta de Margen Negativo (HU-13 / CA1 — Guardado Bloqueado)</span>
+            </div>
+            <p style={{ margin: '0 0 8px', color: '#7F1D1D' }}>
+              El precio de venta ingresado genera pérdida comercial respecto al costo unitario de adquisición:
+            </p>
+            <ul style={{ margin: '0 0 10px', paddingLeft: '22px' }}>
+              <li><strong>Precio de Venta Ingresado:</strong> S/ {precioNum.toFixed(2)}</li>
+              <li><strong>Costo Unitario de Adquisición (Lote):</strong> S/ {costoRef.toFixed(2)}</li>
+              <li><strong>Margen Negativo Estimado:</strong> <strong style={{ color: '#DC2626' }}>-S/ {diferenciaMargen.toFixed(2)}</strong> por unidad</li>
+            </ul>
+            <div style={{ fontSize: '12px', color: '#991B1B', background: '#FEE2E2', padding: '6px 10px', borderRadius: '4px', border: '1px solid #FECACA' }}>
+              🚫 <strong>Restricción del Sistema:</strong> No es posible guardar este producto mientras el precio de venta sea inferior al costo de adquisición.
             </div>
           </div>
         )}
@@ -305,7 +332,16 @@ export default function ProductForm({ initialData, isEditing, onSubmit, onCancel
         </label>
 
         <div style={{ marginTop: '12px', display: 'flex', gap: '10px' }}>
-          <button className="primary" type="submit">
+          <button
+            className="primary"
+            type="submit"
+            disabled={esMargenNegativo}
+            style={{
+              opacity: esMargenNegativo ? 0.5 : 1,
+              cursor: esMargenNegativo ? 'not-allowed' : 'pointer'
+            }}
+            title={esMargenNegativo ? 'No se puede guardar: el precio es menor al costo de adquisición' : ''}
+          >
             {isEditing ? 'Guardar cambios' : 'Registrar producto'}
           </button>
           {isEditing && (

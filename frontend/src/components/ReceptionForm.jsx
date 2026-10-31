@@ -11,6 +11,21 @@ const generarCodigoLote = () => {
 
 const getFechaHoy = () => new Date().toISOString().split('T')[0];
 
+// P04: Formatear fecha física de llegada sin desfase de zona horaria UTC
+const formatearFechaLlegada = (fechaStr) => {
+  if (!fechaStr) return '—';
+  if (typeof fechaStr === 'string') {
+    const parte = fechaStr.split('T')[0];
+    const segs = parte.split('-');
+    if (segs.length === 3) {
+      const [anio, mes, dia] = segs;
+      return `${dia.padStart(2, '0')}/${mes.padStart(2, '0')}/${anio}`;
+    }
+  }
+  const d = new Date(fechaStr);
+  return `${d.getUTCDate().toString().padStart(2, '0')}/${(d.getUTCMonth() + 1).toString().padStart(2, '0')}/${d.getUTCFullYear()}`;
+};
+
 const initial = {
   codigoLote: '',
   proveedor: '', // Limpio por solicitud del usuario
@@ -138,7 +153,7 @@ export default function ReceptionForm({ productos, onSubmit, cargando }) {
         codigoLote: form.codigoLote.trim(),
         proveedor: form.proveedor.trim(),
         documentoReferencia: form.documentoReferencia.trim() || null,
-        fechaLlegada: form.fechaLlegada ? new Date(form.fechaLlegada) : new Date(),
+        fechaLlegada: form.fechaLlegada ? `${form.fechaLlegada}T12:00:00.000Z` : new Date().toISOString(),
         idProducto: Number(form.idProducto),
         cantidad: cant,
         costoUnitario: form.costoUnitario ? Number(form.costoUnitario) : null,
@@ -302,6 +317,45 @@ export default function ReceptionForm({ productos, onSubmit, cargando }) {
           </p>
         )}
 
+        {/* P07: Advertencia cuando el costo del lote supera el precio de venta (HU-13 / CA2 / PTLJ-82) */}
+        {(() => {
+          const productoSeleccionado = productos.find(p => String(p.id) === String(form.idProducto));
+          const precioVentaActual = productoSeleccionado ? Number(productoSeleccionado.precio || 0) : 0;
+          const costoUnitarioIngresado = Number(form.costoUnitario) || 0;
+          const tieneCostoSuperior = productoSeleccionado && costoUnitarioIngresado > 0 && precioVentaActual > 0 && costoUnitarioIngresado > precioVentaActual;
+          const diferenciaMargenLote = precioVentaActual - costoUnitarioIngresado;
+
+          if (!tieneCostoSuperior) return null;
+
+          return (
+            <div style={{
+              background: '#FFFBEB',
+              border: '1px solid #F59E0B',
+              color: '#92400E',
+              padding: '12px 16px',
+              borderRadius: '6px',
+              margin: '14px 0',
+              fontSize: '13px',
+              lineHeight: 1.5
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 'bold', fontSize: '14px', marginBottom: '6px' }}>
+                <span>⚠️</span> Advertencia de Margen Negativo en Lote (HU-13 / CA2)
+              </div>
+              <p style={{ margin: '0 0 6px' }}>
+                El costo unitario ingresado supera el precio de venta registrado para <strong>{productoSeleccionado.nombre}</strong>:
+              </p>
+              <ul style={{ margin: '0 0 8px', paddingLeft: '20px' }}>
+                <li><strong>Precio de Venta Actual en Catálogo:</strong> S/ {precioVentaActual.toFixed(2)}</li>
+                <li><strong>Costo Unitario del Lote:</strong> S/ {costoUnitarioIngresado.toFixed(2)}</li>
+                <li><strong>Margen Negativo Estimado:</strong> <strong style={{ color: '#DC2626' }}>-S/ {Math.abs(diferenciaMargenLote).toFixed(2)}</strong> por unidad</li>
+              </ul>
+              <small style={{ color: '#B45309', display: 'block' }}>
+                ℹ️ Se permite registrar el lote según el CA2, pero se sugiere actualizar el precio de venta en el catálogo para evitar pérdidas comerciales.
+              </small>
+            </div>
+          );
+        })()}
+
         {error && <div className="alert err">{error}</div>}
         {mensaje && <div className="alert ok">{mensaje}</div>}
 
@@ -373,7 +427,7 @@ export default function ReceptionForm({ productos, onSubmit, cargando }) {
                       <td style={{ padding: '8px 6px' }}>{l.proveedor}</td>
                       <td style={{ padding: '8px 6px', color: '#9CA3AF' }}>{l.documentoReferencia || '—'}</td>
                       <td style={{ padding: '8px 6px' }}>
-                        {l.fechaLlegada ? new Date(l.fechaLlegada).toLocaleDateString('es-PE') : '—'}
+                        {formatearFechaLlegada(l.fechaLlegada)}
                       </td>
                       <td style={{ padding: '8px 6px', color: '#6E7681' }}>
                         {new Date(l.fechaCreacion).toLocaleString('es-PE', { dateStyle: 'short', timeStyle: 'short' })}

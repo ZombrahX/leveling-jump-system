@@ -38,13 +38,19 @@ export const reservaService = {
     return reservasCreadas;
   },
 
-  // Obtener reservas con filtros (Staff)
-  async obtenerReservas(filtros = {}) {
+  // Obtener reservas con filtros (Staff - requiere token de ADMIN o SUPERADMIN)
+  async obtenerReservas(filtros = {}, token) {
     const params = new URLSearchParams();
     if (filtros.estado) params.append('estado', filtros.estado);
     if (filtros.busqueda) params.append('busqueda', filtros.busqueda);
 
-    const res = await fetch(`${API_URL}?${params.toString()}`);
+    const res = await fetch(`${API_URL}?${params.toString()}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      }
+    });
     return handleResponse(res);
   },
 

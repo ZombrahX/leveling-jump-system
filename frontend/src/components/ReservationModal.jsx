@@ -28,6 +28,7 @@ export default function ReservationModal({ isOpen, producto, onClose, usuarioAct
   const [configFeedback, setConfigFeedback] = useState('');
 
   const total = Number(producto?.precio || 0);
+  const isAgotado = producto?.stockDisponible !== undefined && producto.stockDisponible <= 0;
 
   // Carga inicial al abrir el modal
   useEffect(() => {
@@ -167,6 +168,11 @@ export default function ReservationModal({ isOpen, producto, onClose, usuarioAct
     e.preventDefault();
     setError('');
 
+    if (isAgotado) {
+      setError('Este producto se encuentra actualmente AGOTADO. No hay unidades físicas disponibles para reservar (HU-06 / CA2).');
+      return;
+    }
+
     if (!nombre.trim()) {
       setError('Por favor ingresa el nombre completo del cliente.');
       return;
@@ -266,6 +272,30 @@ export default function ReservationModal({ isOpen, producto, onClose, usuarioAct
                 </div>
               </div>
             </div>
+
+            {/* P08: Alerta de producto agotado */}
+            {isAgotado && (
+              <div style={{
+                background: '#FEF2F2',
+                border: '1px solid #EF4444',
+                color: '#991B1B',
+                padding: '12px 14px',
+                borderRadius: '6px',
+                marginBottom: '16px',
+                fontSize: '13px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}>
+                <span style={{ fontSize: '18px' }}>🚫</span>
+                <div>
+                  <strong>Producto Agotado (Sin Unidades Disponibles):</strong>
+                  <div style={{ fontSize: '12px', marginTop: '2px', color: '#B91C1C' }}>
+                    No quedan unidades físicas en inventario. Las reservas se encuentran bloqueadas (HU-06 / CA2).
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Aviso de Política Especial para el Cliente */}
             {politica.modo === MODOS_POLITICA.PAGO_TOTAL && (
@@ -588,8 +618,19 @@ export default function ReservationModal({ isOpen, producto, onClose, usuarioAct
                 />
               </label>
 
-              <button className="primary" style={{ width: '100%', marginTop: '14px' }} disabled={loading}>
-                {loading ? 'Generando reserva...' : `Confirmar Reserva con S/ ${adelantoNum.toFixed(2)}`}
+              <button
+                className="primary"
+                style={{
+                  width: '100%',
+                  marginTop: '14px',
+                  opacity: isAgotado ? 0.5 : 1,
+                  cursor: isAgotado ? 'not-allowed' : 'pointer'
+                }}
+                disabled={loading || isAgotado}
+              >
+                {isAgotado
+                  ? '🚫 Producto Agotado — Reserva Bloqueada'
+                  : (loading ? 'Generando reserva...' : `Confirmar Reserva con S/ ${adelantoNum.toFixed(2)}`)}
               </button>
             </form>
           </div>

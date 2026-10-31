@@ -20,3 +20,6 @@ yarn-debug.log*
 yarn-error.log*
 .DS_Store
 Thumbs.db
+
+# Documentación interna de desarrollo
+MEMORIA_DEL_PROYECTO.md

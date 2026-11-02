@@ -40,7 +40,8 @@ const registrarProducto = async (req, res) => {
         if (error.code === 'P2002') {
             return res.status(400).json({ error: "Ya existe un producto con este código SKU o combinación única." });
         }
-        return res.status(500).json({ error: error.message });
+        console.error("[ProductController.registrarProducto] Detalle técnico:", error);
+        return res.status(500).json({ error: "Error interno al registrar el producto." });
     }
 };
 
@@ -93,9 +94,9 @@ const obtenerProductos = async (req, res) => {
             productos: productosConStock
         });
     } catch (error) {
+        console.error("[ProductController.obtenerProductos] Detalle técnico:", error);
         return res.status(500).json({
-            error: "Error al obtener los productos",
-            detalle: error.message
+            error: "Error interno al obtener los productos"
         });
     }
 };
@@ -114,9 +115,9 @@ const obtenerProductoPorId = async (req, res) => {
 
         return res.status(200).json(producto);
     } catch (error) {
+        console.error("[ProductController.obtenerProductoPorId] Detalle técnico:", error);
         return res.status(500).json({
-            error: "Error al buscar el producto",
-            detalle: error.message
+            error: "Error interno al buscar el producto"
         });
     }
 };
@@ -181,9 +182,9 @@ const actualizarProducto = async (req, res) => {
         if (error.code === 'P2002') {
             return res.status(400).json({ error: "El código SKU o la combinación única ya pertenece a otro producto." });
         }
+        console.error("[ProductController.actualizarProducto] Detalle técnico:", error);
         return res.status(500).json({
-            error: "Error al actualizar el producto",
-            detalle: error.message
+            error: "Error interno al actualizar el producto"
         });
     }
 };

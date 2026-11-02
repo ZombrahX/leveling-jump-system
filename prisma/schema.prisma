@@ -144,7 +144,7 @@ model InventarioUnidad {
 
   producto         Producto           @relation(fields: [idProducto], references: [id], onDelete: Restrict)
   lote             LoteIngreso?       @relation(fields: [idLote], references: [id], onDelete: SetNull)
-  reserva          Reserva?
+  reservas         Reserva[]
 
   @@index([idProducto, estadoStock], name: "idx_inventario_disp")
   @@map("inventario_unidades")
@@ -165,7 +165,7 @@ model Reserva {
   id                 Int              @id @default(autoincrement()) @map("id_reserva")
   codigoSeguimiento  String           @unique @map("codigo_seguimiento") @db.VarChar(30) // RES-2026-0001
   idProducto         Int              @map("id_producto")
-  idUnidad           Int?             @unique @map("id_unidad_inventario") // Unidad física reservada
+  idUnidad           Int?             @map("id_unidad_inventario") // Unidad física reservada (1:N histórico)
   idUsuario          Int?             @map("id_usuario") // Cliente registrado (opcional)
 
   // Datos de contacto del cliente
@@ -189,6 +189,7 @@ model Reserva {
   usuario            Usuario?         @relation(fields: [idUsuario], references: [id], onDelete: SetNull)
 
   @@index([idProducto], name: "idx_reserva_producto")
+  @@index([idUnidad], name: "idx_reserva_unidad")
   @@index([estadoReserva], name: "idx_reserva_estado")
   @@map("reservas")
 }

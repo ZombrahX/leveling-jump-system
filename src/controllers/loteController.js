@@ -110,7 +110,10 @@ const registrarLoteConUnidades = async (req, res) => {
     if (error.code === 'P2002') {
       return res.status(400).json({ error: "El código de lote o algún código de serie ya existe." });
     }
-    return res.status(500).json({ error: "Error interno del servidor al procesar el lote: " + error.message });
+    const cleanError = (error.message && !error.message.includes('\n') && !error.message.includes('prisma') && !error.message.includes('C:\\'))
+      ? error.message
+      : "Error interno al procesar el lote.";
+    return res.status(500).json({ error: cleanError });
   }
 };
 
@@ -136,7 +139,8 @@ const obtenerLotes = async (req, res) => {
       }))
     });
   } catch (error) {
-    return res.status(500).json({ error: "Error al obtener historial de lotes: " + error.message });
+    console.error("Error al obtener historial de lotes:", error);
+    return res.status(500).json({ error: "Error interno al obtener historial de lotes." });
   }
 };
 

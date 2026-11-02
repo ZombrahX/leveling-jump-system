@@ -4,6 +4,22 @@ const { enviarComprobanteReserva } = require('../services/emailService');
 const prisma = new PrismaClient();
 
 /**
+ * Sanitiza los errores técnicos o de Prisma para evitar exponer rutas o fallas internas al cliente
+ */
+function sanitizarError(error, defaultMsg = 'Ocurrió un error al procesar la reserva.') {
+  if (error.code === 'P2002') {
+    return 'Conflicto de unicidad: la unidad o código ya cuenta con un registro activo.';
+  }
+  if (error.code && error.code.startsWith('P')) {
+    return 'Inconsistencia en la base de datos al procesar la reserva.';
+  }
+  if (error.message && !error.message.includes('\n') && !error.message.includes('prisma') && !error.message.includes('C:\\') && !error.message.includes('/')) {
+    return error.message;
+  }
+  return defaultMsg;
+}
+
+/**
  * Genera un código correlativo único para reservas: RES-2026-XXXX
  */
 function generarCodigoSeguimiento() {
@@ -61,13 +77,18 @@ const crearReserva = async (req, res) => {
     const codigoSeguimiento = generarCodigoSeguimiento();
     const estadoInicial = adelanto > 0 ? 'CONFIRMADA' : 'PENDIENTE';
 
-    // Transacción ACID para asegurar asignación atómica de inventario (P08 / HU-06 CA2)
+    // Transacción ACID para asegurar asignación atómica de inventario (P08 / P09 / HU-06 CA2)
     const resultado = await prisma.$transaction(async (tx) => {
-      // P08: Buscar si hay unidad física disponible en inventario
+      // P08 / P09: Buscar si hay unidad física disponible que no tenga reservas activas
       const unidadDisponible = await tx.inventarioUnidad.findFirst({
         where: {
           idProducto: parseInt(idProducto),
-          estadoStock: 'DISPONIBLE'
+          estadoStock: 'DISPONIBLE',
+          reservas: {
+            none: {
+              estadoReserva: { in: ['PENDIENTE', 'CONFIRMADA'] }
+            }
+          }
         }
       });
 
@@ -89,7 +110,7 @@ const crearReserva = async (req, res) => {
         throw new Error('PRODUCTO_AGOTADO');
       }
 
-      // Crear la reserva vinculada obligatoriamente a la unidad física
+      // P09: Crear la reserva vinculada a la unidad física (permite historial 1:N sin conflicto P2002)
       const nuevaReserva = await tx.reserva.create({
         data: {
           codigoSeguimiento,
@@ -140,8 +161,8 @@ const crearReserva = async (req, res) => {
         error: 'El producto se encuentra agotado. No quedan unidades físicas disponibles para reservar (HU-06 / CA2).'
       });
     }
-    console.error('[ReservaController.crearReserva] Error:', error);
-    return res.status(500).json({ error: 'Error al registrar la reserva: ' + error.message });
+    console.error('[ReservaController.crearReserva] Detalle técnico:', error);
+    return res.status(500).json({ error: sanitizarError(error, 'Error al registrar la reserva.') });
   }
 };
 
@@ -183,12 +204,17 @@ const obtenerReservas = async (req, res) => {
       reservas
     });
   } catch (error) {
-    return res.status(500).json({ error: 'Error al obtener reservas: ' + error.message });
+    console.error('[ReservaController.obtenerReservas] Detalle técnico:', error);
+    return res.status(500).json({ error: sanitizarError(error, 'Error al obtener la lista de reservas.') });
   }
 };
 
 /**
- * Actualizar estado de una reserva (CONFIRMADA, ENTREGADA, CANCELADA)
+ * P09 / HU-06: Actualizar estado de una reserva (CONFIRMADA, ENTREGADA, CANCELADA)
+ * Sincroniza atómicamente el estado del inventario físico:
+ * - CANCELADA -> DISPONIBLE
+ * - ENTREGADA -> VENDIDO
+ * - CONFIRMADA / PENDIENTE -> RESERVADO
  */
 const actualizarEstadoReserva = async (req, res) => {
   try {
@@ -208,12 +234,27 @@ const actualizarEstadoReserva = async (req, res) => {
       return res.status(404).json({ error: 'Reserva no encontrada.' });
     }
 
-    // Si se cancela y tenía unidad asignada, liberar la unidad a DISPONIBLE
-    if (estadoReserva === 'CANCELADA' && reserva.idUnidad) {
-      await prisma.inventarioUnidad.update({
-        where: { id: reserva.idUnidad },
-        data: { estadoStock: 'DISPONIBLE' }
-      });
+    // P09: Manejo coordinado del ciclo de vida del stock físico
+    if (reserva.idUnidad) {
+      if (estadoReserva === 'CANCELADA') {
+        // Al cancelar, se libera la unidad física a DISPONIBLE para ser re-reservada
+        await prisma.inventarioUnidad.update({
+          where: { id: reserva.idUnidad },
+          data: { estadoStock: 'DISPONIBLE' }
+        });
+      } else if (estadoReserva === 'ENTREGADA') {
+        // Al entregar el kit al comprador, la unidad física pasa definitivamente a VENDIDO
+        await prisma.inventarioUnidad.update({
+          where: { id: reserva.idUnidad },
+          data: { estadoStock: 'VENDIDO' }
+        });
+      } else if (estadoReserva === 'CONFIRMADA' || estadoReserva === 'PENDIENTE') {
+        // Si se reactiva, la unidad física vuelve a estar reservada
+        await prisma.inventarioUnidad.update({
+          where: { id: reserva.idUnidad },
+          data: { estadoStock: 'RESERVADO' }
+        });
+      }
     }
 
     const reservaActualizada = await prisma.reserva.update({
@@ -226,7 +267,8 @@ const actualizarEstadoReserva = async (req, res) => {
       reserva: reservaActualizada
     });
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    console.error('[ReservaController.actualizarEstadoReserva] Detalle técnico:', error);
+    return res.status(500).json({ error: sanitizarError(error, 'Error al actualizar el estado de la reserva.') });
   }
 };
 
@@ -261,8 +303,8 @@ const obtenerMisReservas = async (req, res) => {
       reservas
     });
   } catch (error) {
-    console.error('[ReservaController.obtenerMisReservas] Error:', error);
-    return res.status(500).json({ error: 'Error al consultar tus reservas: ' + error.message });
+    console.error('[ReservaController.obtenerMisReservas] Detalle técnico:', error);
+    return res.status(500).json({ error: sanitizarError(error, 'Error al consultar tus reservas.') });
   }
 };
 

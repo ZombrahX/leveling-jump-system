@@ -10,6 +10,22 @@ const prisma = new PrismaClient();
 const CORREO_SUPERADMIN_OFICIAL = 'cesar.sanchez@isil.pe';
 
 /**
+ * Sanitiza errores internos o de Prisma para que no revelen rutas del servidor ni detalles técnicos
+ */
+function sanitizarError(error, defaultMsg = 'Ocurrió un error interno.') {
+  if (error.code === 'P2002') {
+    return 'Ya existe un registro con esos datos (conflicto de duplicidad).';
+  }
+  if (error.code && error.code.startsWith('P')) {
+    return 'Inconsistencia en la base de datos al procesar la autenticación.';
+  }
+  if (error.message && !error.message.includes('\n') && !error.message.includes('prisma') && !error.message.includes('C:\\') && !error.message.includes('/') && !error.message.includes('@prisma')) {
+    return error.message;
+  }
+  return defaultMsg;
+}
+
+/**
  * PTLJ-43 / HU-11: Registro de usuario con verificación de correo real (OTP)
  */
 const registro = async (req, res) => {
@@ -102,8 +118,8 @@ const registro = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('[AuthController.registro] Error:', error);
-    return res.status(500).json({ error: 'Error al registrar usuario: ' + error.message });
+    console.error('[AuthController.registro] Detalle técnico:', error);
+    return res.status(500).json({ error: sanitizarError(error, 'Error al procesar el registro de usuario.') });
   }
 };
 
@@ -171,8 +187,8 @@ const verificarCodigo = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('[AuthController.verificarCodigo] Error:', error);
-    return res.status(500).json({ error: 'Error al verificar código: ' + error.message });
+    console.error('[AuthController.verificarCodigo] Detalle técnico:', error);
+    return res.status(500).json({ error: sanitizarError(error, 'Error al verificar código.') });
   }
 };
 
@@ -214,8 +230,8 @@ const reenviarCodigo = async (req, res) => {
 
     return res.status(200).json({ mensaje: 'Nuevo código de verificación enviado a tu correo.' });
   } catch (error) {
-    console.error('[AuthController.reenviarCodigo] Error:', error);
-    return res.status(500).json({ error: 'Error al reenviar código: ' + error.message });
+    console.error('[AuthController.reenviarCodigo] Detalle técnico:', error);
+    return res.status(500).json({ error: sanitizarError(error, 'Error al reenviar código.') });
   }
 };
 
@@ -292,8 +308,8 @@ const login = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('[AuthController.login] Error:', error);
-    return res.status(500).json({ error: 'Error al iniciar sesión: ' + error.message });
+    console.error('[AuthController.login] Detalle técnico:', error);
+    return res.status(500).json({ error: sanitizarError(error, 'Error al iniciar sesión.') });
   }
 };
 
@@ -359,8 +375,8 @@ const loginGoogle = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('[AuthController.loginGoogle] Error:', error);
-    return res.status(500).json({ error: 'Error en autenticación Google: ' + error.message });
+    console.error('[AuthController.loginGoogle] Detalle técnico:', error);
+    return res.status(500).json({ error: sanitizarError(error, 'Error al autenticar con Google.') });
   }
 };
 
@@ -390,7 +406,8 @@ const obtenerPerfil = async (req, res) => {
 
     return res.status(200).json(usuario);
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    console.error('[AuthController.obtenerPerfil] Detalle técnico:', error);
+    return res.status(500).json({ error: sanitizarError(error, 'Error al consultar perfil.') });
   }
 };
 
@@ -430,8 +447,8 @@ const actualizarPerfil = async (req, res) => {
       usuario: usuarioActualizado
     });
   } catch (error) {
-    console.error('[AuthController.actualizarPerfil] Error:', error);
-    return res.status(500).json({ error: 'Error al actualizar perfil: ' + error.message });
+    console.error('[AuthController.actualizarPerfil] Detalle técnico:', error);
+    return res.status(500).json({ error: sanitizarError(error, 'Error al actualizar perfil.') });
   }
 };
 
@@ -488,7 +505,8 @@ const crearStaff = async (req, res) => {
     });
 
   } catch (error) {
-    return res.status(500).json({ error: 'Error al crear miembro de staff: ' + error.message });
+    console.error('[AuthController.crearStaff] Detalle técnico:', error);
+    return res.status(500).json({ error: sanitizarError(error, 'Error al crear miembro de staff.') });
   }
 };
 
@@ -516,7 +534,8 @@ const listarStaff = async (req, res) => {
 
     return res.status(200).json(staff);
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    console.error('[AuthController.listarStaff] Detalle técnico:', error);
+    return res.status(500).json({ error: sanitizarError(error, 'Error al listar personal de staff.') });
   }
 };
 
@@ -555,7 +574,8 @@ const toggleEstadoStaff = async (req, res) => {
       }
     });
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    console.error('[AuthController.toggleEstadoStaff] Detalle técnico:', error);
+    return res.status(500).json({ error: sanitizarError(error, 'Error al actualizar estado del usuario.') });
   }
 };
 

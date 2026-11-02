@@ -1,31 +1,44 @@
+require('dotenv').config();
 const nodemailer = require('nodemailer');
 
-// Verificar si las credenciales de correo están configuradas
-const hasCredentials = Boolean(process.env.EMAIL_USER && process.env.EMAIL_PASS);
+/**
+ * Obtiene el transporte de correo configurado.
+ * Limpia espacios accidentales en contraseñas de aplicación de Google (e.g. "xxxx xxxx xxxx xxxx").
+ */
+function getTransporter() {
+  const user = process.env.EMAIL_USER ? process.env.EMAIL_USER.trim() : null;
+  const rawPass = process.env.EMAIL_PASS ? process.env.EMAIL_PASS.trim() : null;
+  const pass = rawPass ? rawPass.replace(/\s+/g, '') : null;
 
-const transporter = hasCredentials
-  ? nodemailer.createTransport({
+  if (user && pass) {
+    return nodemailer.createTransport({
       service: 'gmail',
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
-      }
-    })
-  : null;
+      auth: { user, pass }
+    });
+  }
+  return null;
+}
 
 /**
  * Envía un correo con el código OTP de verificación de 6 dígitos.
- * P01: Si no hay credenciales SMTP configuradas o falla el transporte en modo dev,
- * registra el OTP en consola y permite que el flujo de verificación continúe.
+ * P01: Envío real por Gmail SMTP. En entorno dev, si no hay credenciales o fallan,
+ * se permite fallback en consola para testing continuo sin bloquear el registro.
  */
 async function enviarCodigoVerificacion(destinatario, nombre, codigo) {
+  const transporter = getTransporter();
+  const isDev = process.env.NODE_ENV !== 'production';
+
   if (!transporter) {
-    console.warn(`\n=============================================================`);
-    console.warn(`[EmailService - MODO PRUEBAS / DEV] Credenciales SMTP no detectadas en .env`);
-    console.warn(`Destinatario: ${destinatario} (${nombre})`);
-    console.warn(`Código de verificación OTP: ${codigo}`);
-    console.warn(`=============================================================\n`);
-    return { success: true, devMode: true };
+    if (isDev) {
+      console.warn(`\n=============================================================`);
+      console.warn(`[EmailService - MODO PRUEBAS / DEV] Credenciales SMTP no detectadas en .env`);
+      console.warn(`Destinatario: ${destinatario} (${nombre})`);
+      console.warn(`Código de verificación OTP: ${codigo}`);
+      console.warn(`=============================================================\n`);
+    } else {
+      console.error(`[EmailService] Servicio SMTP no configurado en entorno de producción.`);
+    }
+    return { success: true, devMode: isDev };
   }
 
   const mailOptions = {
@@ -70,9 +83,8 @@ async function enviarCodigoVerificacion(destinatario, nombre, codigo) {
     return { success: true, messageId: info.messageId };
   } catch (error) {
     console.error(`[EmailService] Error al enviar correo a ${destinatario}:`, error.message);
-    // Si las credenciales eran inválidas en el entorno local (Missing credentials for "PLAIN")
-    if (error.code === 'EAUTH' || error.message.includes('Missing credentials') || error.message.includes('auth')) {
-      console.warn(`[EmailService - FALLBACK OTP] Mostrando código en consola: ${codigo}`);
+    if (isDev && (error.code === 'EAUTH' || error.message.includes('535') || error.message.includes('auth') || error.message.includes('Missing credentials'))) {
+      console.warn(`[EmailService - FALLBACK DEV] Mostrando código en consola: ${codigo}`);
       return { success: true, devMode: true, fallback: true };
     }
     throw error;
@@ -83,6 +95,7 @@ async function enviarCodigoVerificacion(destinatario, nombre, codigo) {
  * Envía un correo con el comprobante de reserva de unidad (HU-06).
  */
 async function enviarComprobanteReserva(destinatario, nombre, reserva) {
+  const transporter = getTransporter();
   if (!transporter) {
     console.warn(`[EmailService - DEV] Comprobante de reserva generado para ${destinatario} [${reserva.codigoSeguimiento}] (Sin SMTP configurado)`);
     return { success: true, devMode: true };

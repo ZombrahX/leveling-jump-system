@@ -169,7 +169,7 @@ export default function ReservationModal({ isOpen, producto, onClose, usuarioAct
     setError('');
 
     if (isAgotado) {
-      setError('Este producto se encuentra actualmente AGOTADO. No hay unidades físicas disponibles para reservar (HU-06 / CA2).');
+      setError('Este producto se encuentra actualmente agotado. No hay unidades físicas disponibles para reservar.');
       return;
     }
 
@@ -289,9 +289,9 @@ export default function ReservationModal({ isOpen, producto, onClose, usuarioAct
               }}>
                 <span style={{ fontSize: '18px' }}>🚫</span>
                 <div>
-                  <strong>Producto Agotado (Sin Unidades Disponibles):</strong>
+                  <strong>Producto Agotado:</strong>
                   <div style={{ fontSize: '12px', marginTop: '2px', color: '#B91C1C' }}>
-                    No quedan unidades físicas en inventario. Las reservas se encuentran bloqueadas (HU-06 / CA2).
+                    No quedan unidades físicas en inventario. Las reservas para este producto se encuentran temporalmente deshabilitadas.
                   </div>
                 </div>
               </div>

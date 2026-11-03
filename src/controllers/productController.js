@@ -32,7 +32,7 @@ const registrarProducto = async (req, res) => {
         });
 
         return res.status(201).json({
-            mensaje: "Producto registrado exitosamente (PTLJ-14)",
+            mensaje: "Producto registrado exitosamente.",
             producto: nuevoProducto
         });
     } catch (error) {
@@ -152,7 +152,7 @@ const actualizarProducto = async (req, res) => {
                 const costoNum = parseFloat(unidadConCosto.costoUnitario);
                 if (precioNum < costoNum) {
                     return res.status(400).json({
-                        error: `No se puede guardar un precio de venta (S/ ${precioNum.toFixed(2)}) inferior al costo de adquisición registrado (S/ ${costoNum.toFixed(2)}). Margen negativo no permitido (HU-13 / CA1).`
+                        error: `No se puede guardar un precio de venta (S/ ${precioNum.toFixed(2)}) inferior al costo de adquisición registrado (S/ ${costoNum.toFixed(2)}). El precio de venta debe ser igual o superior al costo.`
                     });
                 }
             }
@@ -175,7 +175,7 @@ const actualizarProducto = async (req, res) => {
         });
 
         return res.status(200).json({
-            mensaje: "Producto actualizado exitosamente (PTLJ-16)",
+            mensaje: "Producto actualizado exitosamente.",
             producto: productoActualizado
         });
     } catch (error) {

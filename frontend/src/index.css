@@ -911,7 +911,7 @@ td small {
   color: #C9D1D9;
 }
 
-/* Alerta HU-13: Margen Negativo */
+/* Alerta: Margen Negativo */
 .alert-margin-warning {
   background: rgba(239, 68, 68, 0.15);
   border: 1px solid #EF4444;
@@ -946,7 +946,7 @@ td small {
   margin-bottom: 12px;
 }
 
-/* Tarjeta de Resumen de Reserva (HU-06) */
+/* Tarjeta de Resumen de Reserva */
 .reserva-breakdown {
   background: #0D1117;
   border: 1px solid #30363D;

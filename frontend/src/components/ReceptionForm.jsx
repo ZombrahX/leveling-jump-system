@@ -339,7 +339,7 @@ export default function ReceptionForm({ productos, onSubmit, cargando }) {
               lineHeight: 1.5
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 'bold', fontSize: '14px', marginBottom: '6px' }}>
-                <span>⚠️</span> Advertencia de Margen Negativo en Lote (HU-13 / CA2)
+                <span>⚠️</span> Advertencia de Margen Negativo en Lote
               </div>
               <p style={{ margin: '0 0 6px' }}>
                 El costo unitario ingresado supera el precio de venta registrado para <strong>{productoSeleccionado.nombre}</strong>:
@@ -350,7 +350,7 @@ export default function ReceptionForm({ productos, onSubmit, cargando }) {
                 <li><strong>Margen Negativo Estimado:</strong> <strong style={{ color: '#DC2626' }}>-S/ {Math.abs(diferenciaMargenLote).toFixed(2)}</strong> por unidad</li>
               </ul>
               <small style={{ color: '#B45309', display: 'block' }}>
-                ℹ️ Se permite registrar el lote según el CA2, pero se sugiere actualizar el precio de venta en el catálogo para evitar pérdidas comerciales.
+                ℹ️ El sistema permite registrar el lote, pero se recomienda actualizar el precio de venta en el catálogo para asegurar la rentabilidad comercial.
               </small>
             </div>
           );
@@ -393,7 +393,7 @@ export default function ReceptionForm({ productos, onSubmit, cargando }) {
                 📋 Últimos Lotes Recibidos en Inventario
               </h3>
               <span style={{ fontSize: '12px', color: '#8B949E' }}>
-                Ordenado por <b>{sortField.toUpperCase()}</b> ({sortOrder === 'asc' ? 'Ascendente ▲' : 'Descendente ▼'})
+                Ordenado por <b>{sortField === 'fechaCreacion' ? 'Fecha de Registro' : sortField === 'fechaLlegada' ? 'Fecha de Arribo' : sortField === 'codigoLote' ? 'Código de Lote' : sortField}</b> ({sortOrder === 'asc' ? 'más antiguos primero ▲' : 'más recientes primero ▼'})
               </span>
             </div>
             <div style={{ overflowX: 'auto' }}>

@@ -139,7 +139,7 @@ export default function PublicCatalog({
                       cursor: isAgotado ? 'not-allowed' : 'pointer'
                     }}
                     onClick={() => !isAgotado && onReservarProducto && onReservarProducto(p)}
-                    title={isAgotado ? 'Producto agotado. No hay unidades disponibles para reservar (HU-06 / CA2).' : 'Apartar este kit'}
+                    title={isAgotado ? 'Producto agotado. No hay unidades disponibles para reservar.' : 'Apartar este kit'}
                   >
                     {isAgotado ? '🚫 Agotado' : '🔖 Reservar'}
                   </button>

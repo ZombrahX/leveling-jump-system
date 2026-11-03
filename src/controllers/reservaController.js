@@ -158,7 +158,7 @@ const crearReserva = async (req, res) => {
   } catch (error) {
     if (error.message === 'PRODUCTO_AGOTADO') {
       return res.status(400).json({
-        error: 'El producto se encuentra agotado. No quedan unidades físicas disponibles para reservar (HU-06 / CA2).'
+        error: 'El producto se encuentra agotado. No quedan unidades físicas disponibles para reservar.'
       });
     }
     console.error('[ReservaController.crearReserva] Detalle técnico:', error);

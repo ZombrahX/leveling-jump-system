@@ -83,7 +83,7 @@ export default function ProductForm({ initialData, isEditing, onSubmit, onCancel
 
     // P06: Bloquear guardado si el precio de venta es menor al costo de adquisición (HU-13 / CA1)
     if (esMargenNegativo) {
-      alert(`⚠️ Acción Bloqueada (HU-13 / CA1):\nEl precio de venta (S/ ${precioNum.toFixed(2)}) no puede ser inferior al costo de adquisición registrado (S/ ${costoRef.toFixed(2)}).\nMargen negativo: -S/ ${diferenciaMargen.toFixed(2)} por unidad.\n\nPor política comercial, debes asignar un precio igual o superior al costo.`);
+      alert(`⚠️ Acción Bloqueada:\nEl precio de venta (S/ ${precioNum.toFixed(2)}) no puede ser inferior al costo de adquisición registrado (S/ ${costoRef.toFixed(2)}).\nMargen negativo: -S/ ${diferenciaMargen.toFixed(2)} por unidad.\n\nPor política comercial, debes asignar un precio igual o superior al costo.`);
       return;
     }
 
@@ -279,18 +279,18 @@ export default function ProductForm({ initialData, isEditing, onSubmit, onCancel
             onChange={e => setPoliticaReserva(e.target.value)}
           >
             <option value={MODOS_POLITICA.ESTANDAR}>
-              Caso 1: Flexible / Estándar (3 tramos: Mínimo configurable, Intermedio y Total)
+              Flexible / Estándar (Adelanto Mínimo configurable, Intermedio y Total)
             </option>
             <option value={MODOS_POLITICA.CINCUENTA_TOTAL}>
-              Caso 2: Económico (2 tramos: Mínimo 50% y Total 100%)
+              Económico (Mínimo 50% y Total 100%)
             </option>
             <option value={MODOS_POLITICA.PAGO_TOTAL}>
-              Caso 3: Exclusivo / Especial (1 tramo: Solo 100% Pago Total)
+              Exclusivo / Preventa Especial (100% Pago Total Requerido)
             </option>
           </select>
         </label>
 
-        {/* P05 & P06: Alerta de precio menor al costo con desglose explícito (CA1 - HU-13) */}
+        {/* Alerta de precio menor al costo con desglose explícito */}
         {esMargenNegativo && (
           <div style={{
             background: '#FEF2F2',
@@ -304,7 +304,7 @@ export default function ProductForm({ initialData, isEditing, onSubmit, onCancel
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 'bold', fontSize: '14px', color: '#B91C1C', marginBottom: '8px' }}>
               <span style={{ fontSize: '18px' }}>⚠️</span>
-              <span>Alerta de Margen Negativo (HU-13 / CA1 — Guardado Bloqueado)</span>
+              <span>Alerta de Margen Negativo (Guardado Bloqueado)</span>
             </div>
             <p style={{ margin: '0 0 8px', color: '#7F1D1D' }}>
               El precio de venta ingresado genera pérdida comercial respecto al costo unitario de adquisición:

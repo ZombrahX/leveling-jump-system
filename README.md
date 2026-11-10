@@ -42,28 +42,34 @@ leveling-jump-system/
 * Node.js v18+ y npm instalados.
 * Acceso a la base de datos PostgreSQL de Supabase.
 
-### 2. Configuración de Variables de Entorno
+## 🌐 Despliegue en la Nube (Producción Oficial)
+
+* **Aplicación Web (Frontend en Vercel):** [https://leveling-jump-system-vh7i.vercel.app/](https://leveling-jump-system-vh7i.vercel.app/)
+* **API REST Backend (Render):** [https://leveling-jump-system.onrender.com/](https://leveling-jump-system.onrender.com/)
+* **Base de Datos:** PostgreSQL en Supabase Cloud.
+
+---
+
+### 2. Configuración de Variables de Entorno (Opcional para desarrollo local)
 Copia el archivo `.env.example` y renómbralo a `.env`:
 ```bash
 cp .env.example .env
 ```
 Configura tus credenciales de `DATABASE_URL` y `DIRECT_URL`.
 
-### 3. Iniciar el Backend
+### 3. Iniciar el Backend (Modo Local)
 ```bash
 npm install
-node src/index.js
+npm run dev
 ```
-El servidor backend responderá en: `http://localhost:4000/api`.
 
-### 4. Iniciar el Frontend
+### 4. Iniciar el Frontend (Modo Local)
 En otra terminal:
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
-La aplicación web se abrirá en: `http://localhost:5173`.
 
 ---
 

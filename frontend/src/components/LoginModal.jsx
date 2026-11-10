@@ -423,7 +423,7 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }) {
               <ol style={{ margin: '0 0 0 16px', padding: 0, lineHeight: '1.6' }}>
                 <li>Entra a <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noreferrer" style={{ color: 'var(--color-cyan)' }}>console.cloud.google.com/apis/credentials</a> con tu Gmail.</li>
                 <li>Haz clic en <strong>+ Crear credenciales ➔ ID de cliente de OAuth</strong> (Tipo: <em>Aplicación web</em>).</li>
-                <li>En <em>Orígenes autorizados de JavaScript</em> pon: <code>http://localhost:5173</code></li>
+                <li>En <em>Orígenes autorizados de JavaScript</em> pon la URL de tu app (ej: <code>https://leveling-jump-system-vh7i.vercel.app</code>)</li>
                 <li>Copia tu ID de cliente que termina en <code>.apps.googleusercontent.com</code> y pégalo abajo:</li>
               </ol>
             </div>

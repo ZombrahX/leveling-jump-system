@@ -1,5 +1,7 @@
-const API_URL = 'http://localhost:4000/api/lotes';
-const API_FALLBACK = 'http://localhost:4000/api/recepciones';
+import { API_BASE_URL } from './apiConfig';
+
+const API_URL = `${API_BASE_URL}/api/lotes`;
+const API_FALLBACK = `${API_BASE_URL}/api/recepciones`;
 
 async function responseData(response) {
   const data = await response.json().catch(() => ({}));

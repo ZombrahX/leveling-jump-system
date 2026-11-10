@@ -17,6 +17,14 @@ app.use('/api', loteRoutes);
 app.use('/api', reservaRoutes);
 app.use('/api/auth', authRoutes); 
 
+app.get('/', (req, res) => {
+    res.json({
+        status: 'online',
+        servicio: 'Leveling Jump API',
+        mensaje: 'Servidor operativo y listo para recibir peticiones.'
+    });
+}); 
+
 const PORT = process.env.PORT || 4000;
 
 app.listen(PORT, () => {

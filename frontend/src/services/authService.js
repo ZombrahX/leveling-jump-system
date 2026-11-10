@@ -1,4 +1,6 @@
-const API_BASE = 'http://localhost:4000/api/auth';
+import { API_BASE_URL } from './apiConfig';
+
+const API_BASE = `${API_BASE_URL}/api/auth`;
 
 const TOKEN_KEY = 'lj_auth_token';
 const USER_KEY = 'lj_auth_user';

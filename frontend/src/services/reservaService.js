@@ -1,4 +1,6 @@
-const API_URL = 'http://localhost:4000/api/reservas';
+import { API_BASE_URL } from './apiConfig';
+
+const API_URL = `${API_BASE_URL}/api/reservas`;
 
 async function handleResponse(res) {
   const data = await res.json().catch(() => ({}));

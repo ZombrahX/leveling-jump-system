@@ -102,7 +102,14 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }) {
       setTimer(900);
       setTab('otp');
     } catch (err) {
-      setError(err.message || 'No se pudo completar el registro.');
+      if (err.data && err.data.requiereVerificacion) {
+        setOtpForm({ email: regForm.email, codigo: '' });
+        setTimer(900);
+        setTab('otp');
+        setSuccessMsg(err.message || 'Ingresa el código de verificación.');
+      } else {
+        setError(err.message || 'No se pudo completar el registro.');
+      }
     } finally {
       setLoading(false);
     }

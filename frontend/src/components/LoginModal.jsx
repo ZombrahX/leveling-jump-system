@@ -4,6 +4,7 @@ import { authService } from '../services/authService';
 export default function LoginModal({ isOpen, onClose, onLoginSuccess }) {
   const [tab, setTab] = useState('login'); // 'login' | 'registro' | 'otp' | 'google_setup'
   const [loading, setLoading] = useState(false);
+  const [resending, setResending] = useState(false);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
@@ -34,6 +35,7 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }) {
       setError('');
       setSuccessMsg('');
       setLoading(false);
+      setResending(false);
       setTab('login');
       setLoginForm({ email: '', password: '' });
       setRegForm({ nombre: '', email: '', password: '', telefono: '' });
@@ -97,7 +99,11 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }) {
     setLoading(true);
     try {
       const res = await authService.registro(regForm.nombre, regForm.email, regForm.password, regForm.telefono);
-      setSuccessMsg(res.mensaje || '¡Código de verificación enviado a tu correo!');
+      if (res.emailEnviado === false) {
+        setError(res.mensaje || 'Tu cuenta se creó, pero hubo demora al enviar el correo. Pulsa "Reenviar código".');
+      } else {
+        setSuccessMsg(res.mensaje || '¡Código de verificación enviado a tu correo!');
+      }
       setOtpForm({ email: regForm.email, codigo: '' });
       setTimer(900);
       setTab('otp');
@@ -141,15 +147,15 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }) {
   // 4. Reenviar código
   const handleReenviarOtp = async () => {
     resetMessages();
-    setLoading(true);
+    setResending(true);
     try {
-      await authService.reenviarCodigo(otpForm.email);
+      const res = await authService.reenviarCodigo(otpForm.email);
       setTimer(900);
-      setSuccessMsg('Se ha enviado un nuevo código a tu correo.');
+      setSuccessMsg(res.mensaje || 'Se ha enviado un nuevo código a tu correo.');
     } catch (err) {
       setError(err.message || 'No se pudo reenviar el código.');
     } finally {
-      setLoading(false);
+      setResending(false);
     }
   };
 
@@ -471,6 +477,9 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }) {
                 Hemos enviado un código de 6 dígitos a:
               </p>
               <strong style={{ color: 'var(--color-cyan)', fontSize: '15px' }}>{otpForm.email}</strong>
+              <p style={{ margin: '6px 0 0', fontSize: '12px', color: '#8B949E' }}>
+                Si no lo ves en Recibidos, revisa tu carpeta de Spam o Correo no deseado.
+              </p>
             </div>
 
             <form onSubmit={handleVerificarOtp}>
@@ -507,14 +516,14 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }) {
                   type="button"
                   className="secondary"
                   onClick={handleReenviarOtp}
-                  disabled={loading}
+                  disabled={loading || resending}
                   style={{ padding: '6px 10px', fontSize: '12px' }}
                 >
-                  Reenviar código
+                  {resending ? 'Reenviando...' : 'Reenviar código'}
                 </button>
               </div>
 
-              <button className="primary" style={{ width: '100%', marginTop: '8px' }} disabled={loading}>
+              <button className="primary" style={{ width: '100%', marginTop: '8px' }} disabled={loading || resending}>
                 {loading ? 'Validando...' : 'Confirmar y Activar Cuenta'}
               </button>
 

@@ -141,6 +141,25 @@ export const authService = {
     return handleResponse(res);
   },
 
+  // Buscar usuario por correo para asignación de roles / staff (Superadmin)
+  async buscarUsuarioPorEmail(email) {
+    const res = await fetch(`${API_BASE}/usuarios/buscar?email=${encodeURIComponent(email)}`, {
+      method: 'GET',
+      headers: getAuthHeaders()
+    });
+    return handleResponse(res);
+  },
+
+  // Promover o actualizar rol y permisos de un usuario existente (Superadmin)
+  async asignarRolStaff(idUsuario, payload) {
+    const res = await fetch(`${API_BASE}/staff/${idUsuario}/rol`, {
+      method: 'PUT',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(payload)
+    });
+    return handleResponse(res);
+  },
+
   // Gestión de sesión local
   guardarSesion(token, usuario) {
     localStorage.setItem(TOKEN_KEY, token);

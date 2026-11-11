@@ -10,7 +10,9 @@ const {
   actualizarPerfil,
   crearStaff,
   listarStaff,
-  toggleEstadoStaff
+  toggleEstadoStaff,
+  buscarUsuarioPorEmail,
+  asignarRolStaff
 } = require('../controllers/authController');
 const { verificarToken, requerirRol } = require('../middlewares/authMiddleware');
 
@@ -24,8 +26,10 @@ router.post('/google', loginGoogle);
 // Rutas Protegidas (HU-11 / Perfil de Usuario y Staff)
 router.get('/perfil', verificarToken, obtenerPerfil);
 router.put('/perfil', verificarToken, actualizarPerfil);
+router.get('/usuarios/buscar', verificarToken, requerirRol(['SUPERADMIN']), buscarUsuarioPorEmail);
 router.get('/staff', verificarToken, requerirRol(['SUPERADMIN']), listarStaff);
 router.post('/staff', verificarToken, requerirRol(['SUPERADMIN']), crearStaff);
+router.put('/staff/:id/rol', verificarToken, requerirRol(['SUPERADMIN']), asignarRolStaff);
 router.patch('/staff/:id/toggle', verificarToken, requerirRol(['SUPERADMIN']), toggleEstadoStaff);
 
 module.exports = router;

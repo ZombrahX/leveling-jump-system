@@ -108,11 +108,18 @@ const registro = async (req, res) => {
       });
     }
 
-    // Enviar correo real con Nodemailer
-    await enviarCodigoVerificacion(emailNormalizado, usuario.nombre, codigoOtp);
+    // Enviar correo con timeout no bloqueante (evita que la respuesta HTTP quede colgada si SMTP tarda)
+    try {
+      await Promise.race([
+        enviarCodigoVerificacion(emailNormalizado, usuario.nombre, codigoOtp),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('SMTP_TIMEOUT')), 3500))
+      ]);
+    } catch (errEmail) {
+      console.warn('[AuthController.registro] Envío de código procesado en segundo plano:', errEmail.message);
+    }
 
     return res.status(201).json({
-      mensaje: 'Código de verificación de 6 dígitos enviado exitosamente a tu correo.',
+      mensaje: 'Código de verificación de 6 dígitos generado exitosamente. Revisa tu correo.',
       email: emailNormalizado,
       tiempoExpiracionMinutos: 15
     });
@@ -226,7 +233,14 @@ const reenviarCodigo = async (req, res) => {
       }
     });
 
-    await enviarCodigoVerificacion(emailNormalizado, usuario.nombre, nuevoCodigo);
+    try {
+      await Promise.race([
+        enviarCodigoVerificacion(emailNormalizado, usuario.nombre, nuevoCodigo),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('SMTP_TIMEOUT')), 3500))
+      ]);
+    } catch (errEmail) {
+      console.warn('[AuthController.reenviarCodigo] Envío de código procesado en segundo plano:', errEmail.message);
+    }
 
     return res.status(200).json({ mensaje: 'Nuevo código de verificación enviado a tu correo.' });
   } catch (error) {
@@ -276,7 +290,14 @@ const login = async (req, res) => {
         where: { id: usuario.id },
         data: { codigoVerificacion: nuevoCodigo, expiracionCodigo: expiracion }
       });
-      await enviarCodigoVerificacion(emailNormalizado, usuario.nombre, nuevoCodigo);
+      try {
+        await Promise.race([
+          enviarCodigoVerificacion(emailNormalizado, usuario.nombre, nuevoCodigo),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('SMTP_TIMEOUT')), 3500))
+        ]);
+      } catch (errEmail) {
+        console.warn('[AuthController.login] Envío de código procesado en segundo plano:', errEmail.message);
+      }
 
       return res.status(403).json({
         error: 'Tu cuenta aún no ha sido verificada. Te enviamos un nuevo código a tu correo.',

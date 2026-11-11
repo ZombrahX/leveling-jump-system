@@ -13,7 +13,10 @@ function getTransporter() {
   if (user && pass) {
     return nodemailer.createTransport({
       service: 'gmail',
-      auth: { user, pass }
+      auth: { user, pass },
+      connectionTimeout: 5000, // 5 segundos máximo para negociar conexión TCP
+      greetingTimeout: 4000,   // 4 segundos para respuesta del servidor SMTP
+      socketTimeout: 6000      // 6 segundos máximo de inactividad de socket
     });
   }
   return null;
@@ -82,12 +85,11 @@ async function enviarCodigoVerificacion(destinatario, nombre, codigo) {
     console.log(`[EmailService] Correo enviado a ${destinatario} - MsgID: ${info.messageId}`);
     return { success: true, messageId: info.messageId };
   } catch (error) {
-    console.error(`[EmailService] Error al enviar correo a ${destinatario}:`, error.message);
-    if (isDev && (error.code === 'EAUTH' || error.message.includes('535') || error.message.includes('auth') || error.message.includes('Missing credentials'))) {
-      console.warn(`[EmailService - FALLBACK DEV] Mostrando código en consola: ${codigo}`);
-      return { success: true, devMode: true, fallback: true };
+    console.warn(`[EmailService] Advertencia al enviar correo a ${destinatario}:`, error.message);
+    if (isDev) {
+      console.warn(`[EmailService - CODIGO EN CONSOLA PARA TESTING]: ${codigo}`);
     }
-    throw error;
+    return { success: false, error: error.message, fallbackCode: codigo };
   }
 }
 

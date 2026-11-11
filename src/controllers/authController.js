@@ -579,6 +579,111 @@ const toggleEstadoStaff = async (req, res) => {
   }
 };
 
+/**
+ * Buscar usuario por correo electrónico para asignación de roles / staff (Solo Superadmin)
+ */
+const buscarUsuarioPorEmail = async (req, res) => {
+  try {
+    const { email } = req.query;
+    if (!email || !email.trim()) {
+      return res.status(400).json({ error: 'Debes ingresar un correo electrónico para buscar.' });
+    }
+
+    const emailNormalizado = email.trim().toLowerCase();
+    const usuario = await prisma.usuario.findUnique({
+      where: { email: emailNormalizado },
+      select: {
+        id: true,
+        nombre: true,
+        email: true,
+        rol: true,
+        metodoRegistro: true,
+        emailVerificado: true,
+        telefono: true,
+        permisosModulos: true,
+        activo: true,
+        fechaCreacion: true
+      }
+    });
+
+    if (!usuario) {
+      return res.status(200).json({
+        encontrado: false,
+        mensaje: 'No se encontró ningún usuario registrado con este correo.'
+      });
+    }
+
+    return res.status(200).json({
+      encontrado: true,
+      usuario
+    });
+  } catch (error) {
+    console.error('[AuthController.buscarUsuarioPorEmail] Detalle técnico:', error);
+    return res.status(500).json({ error: sanitizarError(error, 'Error al buscar usuario.') });
+  }
+};
+
+/**
+ * Promover o actualizar rol y permisos de un usuario existente (Solo Superadmin)
+ */
+const asignarRolStaff = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { rol, permisosModulos } = req.body;
+
+    const idUsuario = parseInt(id);
+    const usuario = await prisma.usuario.findUnique({
+      where: { id: idUsuario }
+    });
+
+    if (!usuario) {
+      return res.status(404).json({ error: 'Usuario no encontrado.' });
+    }
+
+    // Regla inmutable: La cuenta del Propietario Principal no puede ser degradada de Superadmin
+    if ((usuario.id === 1 || usuario.email === CORREO_SUPERADMIN_OFICIAL) && rol !== 'SUPERADMIN') {
+      return res.status(403).json({
+        error: 'Operación denegada: La cuenta del Propietario Principal no puede ser degradada de Superadmin.'
+      });
+    }
+
+    const rolFinal = rol === 'SUPERADMIN' ? 'SUPERADMIN' : (rol === 'CLIENTE' ? 'CLIENTE' : 'ADMIN');
+    
+    // Si es SUPERADMIN, tiene todos los módulos habilitados; si es CLIENTE, null; si es ADMIN, los seleccionados
+    const permisosFinales = rolFinal === 'SUPERADMIN'
+      ? ['PRODUCTOS', 'LOTES', 'RESERVAS', 'USUARIOS']
+      : (rolFinal === 'ADMIN' ? (permisosModulos || ['PRODUCTOS', 'LOTES', 'RESERVAS']) : null);
+
+    const usuarioActualizado = await prisma.usuario.update({
+      where: { id: idUsuario },
+      data: {
+        rol: rolFinal,
+        permisosModulos: permisosFinales,
+        emailVerificado: true // Al ser promovido por el superadmin, se garantiza su verificación
+      },
+      select: {
+        id: true,
+        nombre: true,
+        email: true,
+        rol: true,
+        metodoRegistro: true,
+        emailVerificado: true,
+        telefono: true,
+        permisosModulos: true,
+        activo: true
+      }
+    });
+
+    return res.status(200).json({
+      mensaje: `Rol de ${usuarioActualizado.nombre} actualizado a ${usuarioActualizado.rol} con éxito.`,
+      usuario: usuarioActualizado
+    });
+  } catch (error) {
+    console.error('[AuthController.asignarRolStaff] Detalle técnico:', error);
+    return res.status(500).json({ error: sanitizarError(error, 'Error al actualizar el rol del usuario.') });
+  }
+};
+
 module.exports = {
   registro,
   verificarCodigo,
@@ -589,5 +694,7 @@ module.exports = {
   actualizarPerfil,
   crearStaff,
   listarStaff,
-  toggleEstadoStaff
+  toggleEstadoStaff,
+  buscarUsuarioPorEmail,
+  asignarRolStaff
 };

@@ -26,6 +26,40 @@ function sanitizarError(error, defaultMsg = 'Ocurrió un error interno.') {
 }
 
 /**
+ * Genera código OTP de 6 dígitos y fecha de expiración (15 minutos).
+ */
+function generarOtpConExpiracion() {
+  return {
+    codigo: Math.floor(100000 + Math.random() * 900000).toString(),
+    expiracion: new Date(Date.now() + 15 * 60 * 1000)
+  };
+}
+
+/**
+ * Envía un código OTP nuevo y solo reemplaza el código previo vigente en BD si el envío tuvo éxito.
+ */
+async function emitirYPersistirOtp(usuario, emailNormalizado) {
+  const { codigo: nuevoCodigo, expiracion } = generarOtpConExpiracion();
+  const emailResult = await enviarCodigoVerificacion(emailNormalizado, usuario.nombre, nuevoCodigo);
+
+  const tieneCodigoVigente = Boolean(
+    usuario.codigoVerificacion &&
+    usuario.expiracionCodigo &&
+    new Date() < new Date(usuario.expiracionCodigo)
+  );
+
+  // Evita invalidar un código previo ya entregado si el reenvío actual falla por red
+  if (emailResult.success || !tieneCodigoVigente) {
+    await prisma.usuario.update({
+      where: { id: usuario.id },
+      data: { codigoVerificacion: nuevoCodigo, expiracionCodigo: expiracion }
+    });
+  }
+
+  return { emailEnviado: Boolean(emailResult.success), error: emailResult.error };
+}
+
+/**
  * PTLJ-43 / HU-11: Registro de usuario con verificación de correo real (OTP)
  */
 const registro = async (req, res) => {
@@ -61,8 +95,7 @@ const registro = async (req, res) => {
       });
     }
 
-    const codigoOtp = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiracion = new Date(Date.now() + 15 * 60 * 1000); // 15 minutos
+    const { codigo: codigoOtp, expiracion } = generarOtpConExpiracion();
     const passwordHash = await bcrypt.hash(password, 10);
 
     // Determinar si es el Superadmin (Cesar Sanchez / primer usuario) o Cliente
@@ -108,19 +141,15 @@ const registro = async (req, res) => {
       });
     }
 
-    // Enviar correo con timeout no bloqueante (evita que la respuesta HTTP quede colgada si SMTP tarda)
-    try {
-      await Promise.race([
-        enviarCodigoVerificacion(emailNormalizado, usuario.nombre, codigoOtp),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('SMTP_TIMEOUT')), 3500))
-      ]);
-    } catch (errEmail) {
-      console.warn('[AuthController.registro] Envío de código procesado en segundo plano:', errEmail.message);
-    }
+    // Enviar correo con timeouts acotados dentro de emailService (API HTTPS o SMTP IPv4)
+    const emailResult = await enviarCodigoVerificacion(emailNormalizado, usuario.nombre, codigoOtp);
 
     return res.status(201).json({
-      mensaje: 'Código de verificación de 6 dígitos generado exitosamente. Revisa tu correo.',
+      mensaje: emailResult.success
+        ? 'Código de 6 dígitos enviado a tu correo. Revisa también tu carpeta de Spam.'
+        : 'Cuenta creada, pero no se pudo enviar el correo ahora. Pulsa "Reenviar código" en unos segundos.',
       email: emailNormalizado,
+      emailEnviado: Boolean(emailResult.success),
       tiempoExpiracionMinutos: 15
     });
 
@@ -222,27 +251,18 @@ const reenviarCodigo = async (req, res) => {
       return res.status(400).json({ error: 'La cuenta ya está verificada.' });
     }
 
-    const nuevoCodigo = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiracion = new Date(Date.now() + 15 * 60 * 1000);
+    const { emailEnviado } = await emitirYPersistirOtp(usuario, emailNormalizado);
 
-    await prisma.usuario.update({
-      where: { id: usuario.id },
-      data: {
-        codigoVerificacion: nuevoCodigo,
-        expiracionCodigo: expiracion
-      }
-    });
-
-    try {
-      await Promise.race([
-        enviarCodigoVerificacion(emailNormalizado, usuario.nombre, nuevoCodigo),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('SMTP_TIMEOUT')), 3500))
-      ]);
-    } catch (errEmail) {
-      console.warn('[AuthController.reenviarCodigo] Envío de código procesado en segundo plano:', errEmail.message);
+    if (!emailEnviado) {
+      return res.status(503).json({
+        error: 'No pudimos entregar el nuevo código ahora. Revisa tu carpeta de Spam por si llegó uno previo o reintenta en unos segundos.'
+      });
     }
 
-    return res.status(200).json({ mensaje: 'Nuevo código de verificación enviado a tu correo.' });
+    return res.status(200).json({
+      mensaje: 'Nuevo código de verificación enviado. Revisa Recibidos o Spam.',
+      emailEnviado: true
+    });
   } catch (error) {
     console.error('[AuthController.reenviarCodigo] Detalle técnico:', error);
     return res.status(500).json({ error: sanitizarError(error, 'Error al reenviar código.') });
@@ -283,25 +303,14 @@ const login = async (req, res) => {
 
     // Verificar si el correo ya fue confirmado
     if (!usuario.emailVerificado) {
-      // Reenviar código fresco
-      const nuevoCodigo = Math.floor(100000 + Math.random() * 900000).toString();
-      const expiracion = new Date(Date.now() + 15 * 60 * 1000);
-      await prisma.usuario.update({
-        where: { id: usuario.id },
-        data: { codigoVerificacion: nuevoCodigo, expiracionCodigo: expiracion }
-      });
-      try {
-        await Promise.race([
-          enviarCodigoVerificacion(emailNormalizado, usuario.nombre, nuevoCodigo),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('SMTP_TIMEOUT')), 3500))
-        ]);
-      } catch (errEmail) {
-        console.warn('[AuthController.login] Envío de código procesado en segundo plano:', errEmail.message);
-      }
+      const { emailEnviado } = await emitirYPersistirOtp(usuario, emailNormalizado);
 
       return res.status(403).json({
-        error: 'Tu cuenta aún no ha sido verificada. Te enviamos un nuevo código a tu correo.',
+        error: emailEnviado
+          ? 'Tu cuenta aún no ha sido verificada. Te enviamos un nuevo código a tu correo (revisa también Spam).'
+          : 'Tu cuenta aún no ha sido verificada y el envío del correo falló por red. Ingresa tu código previo o pulsa Reenviar.',
         requiereVerificacion: true,
+        emailEnviado,
         email: emailNormalizado
       });
     }

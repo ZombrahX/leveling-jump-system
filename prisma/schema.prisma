@@ -45,6 +45,7 @@ model Usuario {
 
   // Relaciones
   reservas           Reserva[]
+  ventas             Venta[]
 
   @@map("usuarios")
 }
@@ -92,6 +93,7 @@ model Producto {
   // Relaciones
   unidadesInventario InventarioUnidad[]
   reservas           Reserva[]
+  ventasDetalle      VentaDetalle[]
 
   @@unique([nombre, marca, escala, serie], name: "unique_producto_version") // RN-HU03-05: Prevención de duplicados
   @@index([nombre], name: "idx_producto_nombre")                             // RN-HU03-06: Búsqueda rápida
@@ -140,13 +142,16 @@ model InventarioUnidad {
   codigoSerie      String             @unique @map("codigo_serie_unitario") @db.VarChar(50) // LJ-ITEM-0001
   estadoStock      EstadoUnidadStock  @default(DISPONIBLE) @map("estado_stock") // CP-11 cálculo dinámico
   costoUnitario    Decimal?           @map("costo_adquisicion") @db.Decimal(10, 2) // HU-13: Base para validar margen
+  idVentaDetalle   Int?               @map("id_venta_detalle")
   fechaIngreso     DateTime           @default(now()) @map("fecha_ingreso")
 
   producto         Producto           @relation(fields: [idProducto], references: [id], onDelete: Restrict)
   lote             LoteIngreso?       @relation(fields: [idLote], references: [id], onDelete: SetNull)
+  ventaDetalle     VentaDetalle?      @relation(fields: [idVentaDetalle], references: [id], onDelete: SetNull)
   reservas         Reserva[]
 
   @@index([idProducto, estadoStock], name: "idx_inventario_disp")
+  @@index([idVentaDetalle], name: "idx_inventario_venta_detalle")
   @@map("inventario_unidades")
 }
 
@@ -192,4 +197,76 @@ model Reserva {
   @@index([idUnidad], name: "idx_reserva_unidad")
   @@index([estadoReserva], name: "idx_reserva_estado")
   @@map("reservas")
+}
+
+// ----------------------------------------------------
+// HU-05: REGISTRO DE VENTA MULTICANAL
+// ----------------------------------------------------
+enum CanalVenta {
+  TIKTOK
+  FACEBOOK
+  FERIA
+  WEB
+  WHATSAPP
+  OTRO
+}
+
+enum MedioPagoVenta {
+  EFECTIVO
+  YAPE
+  PLIN
+  TRANSFERENCIA
+  TARJETA
+  OTRO
+}
+
+enum EstadoVenta {
+  COMPLETADA
+  ANULADA
+}
+
+model Venta {
+  id                 Int              @id @default(autoincrement()) @map("id_venta")
+  codigoVenta        String           @unique @map("codigo_venta") @db.VarChar(30) // VTA-2026-0001
+  canal              CanalVenta       @default(FERIA) @map("canal_origen")
+  medioPago          MedioPagoVenta   @default(EFECTIVO) @map("medio_pago")
+  montoTotal         Decimal          @map("monto_total") @db.Decimal(10, 2)
+  estado             EstadoVenta      @default(COMPLETADA) @map("estado_venta")
+
+  // Datos opcionales del cliente y canal
+  clienteRef         String?          @map("cliente_referencia") @db.VarChar(150) // Ej: "@otaku_pe" o "Juan Perez"
+  telefonoCliente    String?          @map("telefono_cliente") @db.VarChar(25)
+  emailCliente       String?          @map("email_cliente") @db.VarChar(150)
+
+  observaciones      String?          @map("observaciones") @db.Text
+  idUsuarioVendedor  Int?             @map("id_usuario_vendedor") // Staff que registró la venta
+  fechaVenta         DateTime         @default(now()) @map("fecha_venta")
+  fechaActualizacion DateTime         @updatedAt @map("fecha_actualizacion")
+
+  // Relaciones
+  vendedor           Usuario?         @relation(fields: [idUsuarioVendedor], references: [id], onDelete: SetNull)
+  detalles           VentaDetalle[]
+
+  @@index([canal], name: "idx_venta_canal")
+  @@index([fechaVenta], name: "idx_venta_fecha")
+  @@index([estado], name: "idx_venta_estado")
+  @@map("ventas")
+}
+
+model VentaDetalle {
+  id               Int                @id @default(autoincrement()) @map("id_venta_detalle")
+  idVenta          Int                @map("id_venta")
+  idProducto       Int                @map("id_producto")
+  cantidad         Int                @default(1) @map("cantidad")
+  precioUnitario   Decimal            @map("precio_unitario") @db.Decimal(10, 2)
+  subtotal         Decimal            @map("subtotal") @db.Decimal(10, 2)
+
+  // Relaciones
+  venta            Venta              @relation(fields: [idVenta], references: [id], onDelete: Cascade)
+  producto         Producto           @relation(fields: [idProducto], references: [id], onDelete: Restrict)
+  unidadesVendidas InventarioUnidad[]
+
+  @@index([idVenta], name: "idx_detalle_venta")
+  @@index([idProducto], name: "idx_detalle_producto")
+  @@map("ventas_detalle")
 }

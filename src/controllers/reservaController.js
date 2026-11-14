@@ -13,7 +13,7 @@ function sanitizarError(error, defaultMsg = 'Ocurrió un error al procesar la re
   if (error.code && error.code.startsWith('P')) {
     return 'Inconsistencia en la base de datos al procesar la reserva.';
   }
-  if (error.message && !error.message.includes('\n') && !error.message.includes('prisma') && !error.message.includes('C:\\') && !error.message.includes('/')) {
+  if (error.message && !error.message.includes('\n') && !error.message.includes('prisma') && !error.message.includes('node_modules') && !error.message.includes(':\\')) {
     return error.message;
   }
   return defaultMsg;
@@ -76,6 +76,7 @@ const crearReserva = async (req, res) => {
     const saldo = Math.max(0, total - adelanto);
     const codigoSeguimiento = generarCodigoSeguimiento();
     const estadoInicial = adelanto > 0 ? 'CONFIRMADA' : 'PENDIENTE';
+    const estadoPagoInicial = saldo === 0 ? 'COMPLETADO' : (adelanto > 0 ? 'PARCIAL' : 'PENDIENTE');
 
     // Transacción ACID para asegurar asignación atómica de inventario (P08 / P09 / HU-06 CA2)
     const resultado = await prisma.$transaction(async (tx) => {
@@ -124,6 +125,7 @@ const crearReserva = async (req, res) => {
           montoAdelanto: adelanto,
           saldoPendiente: saldo,
           estadoReserva: estadoInicial,
+          estadoPago: estadoPagoInicial,
           notas: notas ? notas.trim() : null
         },
         include: {
@@ -131,6 +133,20 @@ const crearReserva = async (req, res) => {
           unidadInventario: true
         }
       });
+
+      // HU-09: Si se registró adelanto inicial, guardar comprobante de pago
+      if (adelanto > 0) {
+        await tx.pagoReserva.create({
+          data: {
+            idReserva: nuevaReserva.id,
+            monto: adelanto,
+            medioPago: (req.body.medioPago || 'YAPE').toUpperCase(),
+            referenciaOperacion: req.body.referenciaOperacion ? req.body.referenciaOperacion.trim() : 'Adelanto inicial de reserva',
+            idUsuarioRegistra: idUsuario ? parseInt(idUsuario) : null,
+            observaciones: 'Adelanto inicial registrado al crear la reserva'
+          }
+        });
+      }
 
       return nuevaReserva;
     });
@@ -308,9 +324,168 @@ const obtenerMisReservas = async (req, res) => {
   }
 };
 
+/**
+ * HU-09: Registrar un adelanto o abono sobre una reserva confirmada
+ * Escenario 1: Registra monto y medio de pago, actualiza el saldo pendiente
+ * Escenario 2: Impide pagos mayores al saldo e informa el importe máximo permitido
+ * Escenario 3: Si completa el importe acordado, actualiza saldo a 0 y estadoPago a "COMPLETADO"
+ */
+const registrarPagoReserva = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { monto, medioPago, referenciaOperacion, observaciones } = req.body;
+
+    const idReserva = parseInt(id);
+    if (isNaN(idReserva) || idReserva <= 0) {
+      return res.status(400).json({ error: 'ID de reserva inválido.' });
+    }
+
+    // Validar monto
+    const montoNum = Number(monto);
+    if (isNaN(montoNum) || !isFinite(montoNum) || montoNum <= 0) {
+      return res.status(400).json({
+        error: 'El monto del abono debe ser un número positivo mayor a cero.'
+      });
+    }
+
+    const mediosValidos = ['EFECTIVO', 'YAPE', 'PLIN', 'TRANSFERENCIA', 'TARJETA', 'OTRO'];
+    const medioNormalizado = (medioPago || 'YAPE').toString().trim().toUpperCase();
+    if (!mediosValidos.includes(medioNormalizado)) {
+      return res.status(400).json({
+        error: `Medio de pago no válido. Opciones permitidas: ${mediosValidos.join(', ')}.`
+      });
+    }
+
+    const idUsuarioRegistra = req.usuario ? req.usuario.id : null;
+
+    // Transacción ACID atómica
+    const resultado = await prisma.$transaction(async (tx) => {
+      const reserva = await tx.reserva.findUnique({
+        where: { id: idReserva }
+      });
+
+      if (!reserva) {
+        const err = new Error('La reserva solicitada no existe.');
+        err.statusCode = 404;
+        throw err;
+      }
+
+      if (reserva.estadoReserva === 'CANCELADA' || reserva.estadoReserva === 'EXPIRADA') {
+        const err = new Error(`No se pueden registrar pagos en una reserva que se encuentra ${reserva.estadoReserva}.`);
+        err.statusCode = 400;
+        throw err;
+      }
+
+      const saldoActual = parseFloat(reserva.saldoPendiente);
+
+      // HU-09 Escenario 2: Impedir un pago mayor al saldo
+      if (montoNum > saldoActual) {
+        const err = new Error(
+          `El importe ingresado (S/ ${montoNum.toFixed(2)}) supera el saldo pendiente de la reserva (S/ ${saldoActual.toFixed(2)}). El importe máximo que puede registrarse es S/ ${saldoActual.toFixed(2)}.`
+        );
+        err.statusCode = 400;
+        throw err;
+      }
+
+      const nuevoSaldo = Math.round((saldoActual - montoNum) * 100) / 100;
+      const nuevoTotalAdelanto = Math.round((parseFloat(reserva.montoAdelanto) + montoNum) * 100) / 100;
+
+      // HU-09 Escenario 3: Si completa el saldo pendiente a 0, estadoPago -> COMPLETADO
+      const nuevoEstadoPago = nuevoSaldo === 0 ? 'COMPLETADO' : 'PARCIAL';
+      const nuevoEstadoReserva = reserva.estadoReserva === 'PENDIENTE' ? 'CONFIRMADA' : reserva.estadoReserva;
+
+      // 1. Guardar el pago en pagos_reserva
+      const nuevoPago = await tx.pagoReserva.create({
+        data: {
+          idReserva,
+          monto: montoNum,
+          medioPago: medioNormalizado,
+          referenciaOperacion: referenciaOperacion ? referenciaOperacion.trim() : null,
+          idUsuarioRegistra,
+          observaciones: observaciones ? observaciones.trim() : null
+        }
+      });
+
+      // 2. Actualizar el saldo de la reserva
+      const reservaActualizada = await tx.reserva.update({
+        where: { id: idReserva },
+        data: {
+          montoAdelanto: nuevoTotalAdelanto,
+          saldoPendiente: nuevoSaldo,
+          estadoPago: nuevoEstadoPago,
+          estadoReserva: nuevoEstadoReserva
+        },
+        include: {
+          producto: {
+            select: { id: true, nombre: true, codigo: true, precio: true }
+          },
+          unidadInventario: {
+            select: { id: true, codigoSerie: true, estadoStock: true }
+          },
+          pagos: {
+            orderBy: { fechaPago: 'desc' }
+          }
+        }
+      });
+
+      return { nuevoPago, reservaActualizada };
+    });
+
+    return res.status(201).json({
+      mensaje: resultado.reservaActualizada.saldoPendiente === 0
+        ? '¡Pago completado con éxito! El saldo pendiente de la reserva ha llegado a S/ 0.00.'
+        : `Abono de S/ ${montoNum.toFixed(2)} registrado exitosamente. Nuevo saldo pendiente: S/ ${Number(resultado.reservaActualizada.saldoPendiente).toFixed(2)}.`,
+      pago: resultado.nuevoPago,
+      reserva: resultado.reservaActualizada
+    });
+  } catch (error) {
+    console.error('[ReservaController.registrarPagoReserva] Error:', error.message);
+    const statusCode = error.statusCode || 500;
+    return res.status(statusCode).json({
+      error: sanitizarError(error, 'Error al registrar el pago de la reserva.')
+    });
+  }
+};
+
+/**
+ * HU-09: Consultar historial de pagos de una reserva
+ */
+const obtenerHistorialPagos = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const idReserva = parseInt(id);
+
+    if (isNaN(idReserva) || idReserva <= 0) {
+      return res.status(400).json({ error: 'ID de reserva inválido.' });
+    }
+
+    const pagos = await prisma.pagoReserva.findMany({
+      where: { idReserva },
+      orderBy: { fechaPago: 'desc' },
+      include: {
+        usuarioRegistra: {
+          select: { id: true, nombre: true, email: true }
+        }
+      }
+    });
+
+    return res.status(200).json({
+      total: pagos.length,
+      pagos
+    });
+  } catch (error) {
+    console.error('[ReservaController.obtenerHistorialPagos] Error:', error);
+    return res.status(500).json({
+      error: sanitizarError(error, 'Error al consultar el historial de pagos.')
+    });
+  }
+};
+
 module.exports = {
   crearReserva,
   obtenerReservas,
   obtenerMisReservas,
-  actualizarEstadoReserva
+  actualizarEstadoReserva,
+  registrarPagoReserva,
+  obtenerHistorialPagos
 };

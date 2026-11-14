@@ -79,5 +79,30 @@ export const reservaService = {
       body: JSON.stringify({ estadoReserva: nuevoEstado })
     });
     return handleResponse(res);
+  },
+
+  // HU-09: Registrar adelanto o abono sobre saldo pendiente
+  async registrarPago(idReserva, payload, token) {
+    const res = await fetch(`${API_URL}/${idReserva}/pagos`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      },
+      body: JSON.stringify(payload)
+    });
+    return handleResponse(res);
+  },
+
+  // HU-09: Obtener historial de pagos de una reserva
+  async obtenerHistorialPagos(idReserva, token) {
+    const res = await fetch(`${API_URL}/${idReserva}/pagos`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      }
+    });
+    return handleResponse(res);
   }
 };

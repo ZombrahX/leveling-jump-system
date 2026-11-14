@@ -4,7 +4,9 @@ const {
   crearReserva,
   obtenerReservas,
   obtenerMisReservas,
-  actualizarEstadoReserva
+  actualizarEstadoReserva,
+  registrarPagoReserva,
+  obtenerHistorialPagos
 } = require('../controllers/reservaController');
 const { verificarToken, requerirRol } = require('../middlewares/authMiddleware');
 
@@ -17,5 +19,20 @@ router.get('/reservas/mis-reservas', verificarToken, obtenerMisReservas);
 // Endpoints de gestión de reservas protegidos para Staff (SUPERADMIN y ADMIN)
 router.get('/reservas', verificarToken, requerirRol(['SUPERADMIN', 'ADMIN']), obtenerReservas);
 router.patch('/reservas/:id/estado', verificarToken, requerirRol(['SUPERADMIN', 'ADMIN']), actualizarEstadoReserva);
+
+// HU-09: Endpoints de gestión de adelantos y saldos
+router.post(
+  '/reservas/:id/pagos',
+  verificarToken,
+  requerirRol(['SUPERADMIN', 'ADMIN']),
+  registrarPagoReserva
+);
+
+router.get(
+  '/reservas/:id/pagos',
+  verificarToken,
+  requerirRol(['SUPERADMIN', 'ADMIN']),
+  obtenerHistorialPagos
+);
 
 module.exports = router;

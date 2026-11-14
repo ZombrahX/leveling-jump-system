@@ -11,6 +11,7 @@ import LoginModal from './components/LoginModal';
 import ReservationModal from './components/ReservationModal';
 import MultiReservationModal from './components/MultiReservationModal';
 import VentasPOS from './components/VentasPOS';
+import OrderTrackingModal from './components/OrderTrackingModal';
 import { obtenerProductos, crearProducto, actualizarProducto } from './services/productService';
 import { registrarRecepcion } from './services/recepcionService';
 import { authService } from './services/authService';
@@ -54,6 +55,7 @@ export default function App() {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [productoReserva, setProductoReserva] = useState(null);
   const [showMultiModal, setShowMultiModal] = useState(false);
+  const [showTrackingModal, setShowTrackingModal] = useState(false);
 
   // Bolsa de Reserva (Reservas en Masa) con persistencia en localStorage
   const [bolsaReservas, setBolsaReservas] = useState(() => {
@@ -310,6 +312,13 @@ export default function App() {
               onClick={() => chooseView('catalogo')}
             >
               <span>🛍️</span> Catálogo Comercial
+            </button>
+            <button
+              className="nav-bar-btn"
+              onClick={() => setShowTrackingModal(true)}
+              title="HU-10: Rastrear avance y entrega de tu pedido con tu código RES"
+            >
+              <span>📍</span> Rastrear Pedido (HU-10)
             </button>
             {usuario && (
               <>
@@ -615,6 +624,11 @@ export default function App() {
           load();
           setMsg('¡Reserva múltiple confirmada con éxito!');
         }}
+      />
+
+      <OrderTrackingModal
+        isOpen={showTrackingModal}
+        onClose={() => setShowTrackingModal(false)}
       />
     </main>
   );

@@ -186,6 +186,11 @@ model Reserva {
 
   estadoReserva      EstadoReserva     @default(PENDIENTE) @map("estado_reserva")
   estadoPago         EstadoPagoReserva @default(PENDIENTE) @map("estado_pago") // HU-09: Control de abonos y saldos
+  modalidadEntrega   ModalidadEntrega  @default(RETIRO_FERIA) @map("modalidad_entrega") // HU-10: Modalidad de despacho
+  estadoEntrega      EstadoEntrega     @default(PENDIENTE_PREPARACION) @map("estado_entrega") // HU-10: Avance del pedido
+  fechaEstimadaEntrega DateTime?       @map("fecha_estimada_entrega")
+  direccionEntrega   String?           @map("direccion_entrega") @db.VarChar(255)
+  guiaCourier        String?           @map("guia_courier") @db.VarChar(100)
   notas              String?           @map("notas") @db.Text // Ej: "Retiro en feria sábado / TikTok live"
   fechaReserva       DateTime          @default(now()) @map("fecha_reserva")
   fechaLimite        DateTime?         @map("fecha_limite_retiro")
@@ -200,6 +205,7 @@ model Reserva {
   @@index([idUnidad], name: "idx_reserva_unidad")
   @@index([estadoReserva], name: "idx_reserva_estado")
   @@index([estadoPago], name: "idx_reserva_estado_pago")
+  @@index([estadoEntrega], name: "idx_reserva_estado_entrega")
   @@map("reservas")
 }
 
@@ -302,4 +308,21 @@ model PagoReserva {
   @@index([idReserva], name: "idx_pago_reserva")
   @@index([fechaPago], name: "idx_pago_fecha")
   @@map("pagos_reserva")
+}
+
+// ----------------------------------------------------
+// HU-10: SEGUIMIENTO DE PEDIDOS Y MODALIDAD DE ENTREGA
+// ----------------------------------------------------
+enum ModalidadEntrega {
+  RETIRO_FERIA      // Retiro en feria de los sábados (Arenales)
+  RETIRO_TIENDA     // Retiro en almacén / punto central
+  ENVIO_LIMA        // Envío motorizado / Olva Courier en Lima
+  ENVIO_PROVINCIA   // Agencia de transporte (Shalom / Marvisur)
+}
+
+enum EstadoEntrega {
+  PENDIENTE_PREPARACION // En preparación de paquete
+  LISTO_PARA_ENTREGA    // Listo para recojo en feria o entrega
+  EN_TRANSITO           // En courier o camino a la feria
+  ENTREGADO             // Entregado físicamente al cliente
 }

@@ -481,11 +481,182 @@ const obtenerHistorialPagos = async (req, res) => {
   }
 };
 
+/**
+ * HU-10: Consultar el seguimiento de un pedido por código (Público)
+ * Escenario 1: Muestra estado del pedido, fecha estimada y modalidad de entrega
+ * Escenario 2: Si el código no existe, informa que no se encontró el pedido
+ */
+const consultarSeguimientoPublico = async (req, res) => {
+  try {
+    const { codigo } = req.params;
+
+    if (!codigo || !codigo.trim()) {
+      return res.status(400).json({ error: 'Debe ingresar un código de seguimiento válido.' });
+    }
+
+    const codigoLimpio = codigo.trim().toUpperCase();
+
+    const reserva = await prisma.reserva.findUnique({
+      where: { codigoSeguimiento: codigoLimpio },
+      include: {
+        producto: {
+          select: {
+            id: true,
+            codigo: true,
+            nombre: true,
+            categoria: true,
+            escala: true,
+            marca: true,
+            precio: true,
+            imagenUrl: true
+          }
+        },
+        unidadInventario: {
+          select: {
+            id: true,
+            codigoSerie: true,
+            estadoStock: true
+          }
+        }
+      }
+    });
+
+    // HU-10 Escenario 2: Consultar un código inexistente
+    if (!reserva) {
+      return res.status(404).json({
+        error: 'No se encontró ningún pedido asociado con el código ingresado. Verifique el código e intente nuevamente.'
+      });
+    }
+
+    // Modalidad legible para el cliente
+    const modalidadesTexto = {
+      RETIRO_FERIA: '🎪 Retiro en Feria de los Sábados (Arenales - Stand Leveling Jump)',
+      RETIRO_TIENDA: '🏪 Retiro en Punto Central / Almacén',
+      ENVIO_LIMA: '🛵 Envío a Domicilio en Lima Metropolitana',
+      ENVIO_PROVINCIA: '📦 Envío a Provincia (Agencia Shalom / Marvisur)'
+    };
+
+    const estadosEntregaTexto = {
+      PENDIENTE_PREPARACION: 'En preparación de paquete en almacén',
+      LISTO_PARA_ENTREGA: 'Listo para recojo en feria / entrega',
+      EN_TRANSITO: 'En camino / Despachado por courier',
+      ENTREGADO: 'Entregado al comprador'
+    };
+
+    // HU-10 Escenario 1: Información estructurada con fecha estimada y modalidad
+    return res.status(200).json({
+      codigoSeguimiento: reserva.codigoSeguimiento,
+      estadoReserva: reserva.estadoReserva,
+      estadoPago: reserva.estadoPago,
+      estadoEntrega: reserva.estadoEntrega,
+      estadoEntregaDescripcion: estadosEntregaTexto[reserva.estadoEntrega] || reserva.estadoEntrega,
+      modalidadEntrega: reserva.modalidadEntrega,
+      modalidadEntregaDescripcion: modalidadesTexto[reserva.modalidadEntrega] || reserva.modalidadEntrega,
+      fechaEstimadaEntrega: reserva.fechaEstimadaEntrega,
+      guiaCourier: reserva.guiaCourier,
+      fechaReserva: reserva.fechaReserva,
+      montoTotal: Number(reserva.montoTotal),
+      montoAdelanto: Number(reserva.montoAdelanto),
+      saldoPendiente: Number(reserva.saldoPendiente),
+      producto: reserva.producto,
+      serieAsignada: reserva.unidadInventario ? reserva.unidadInventario.codigoSerie : null
+    });
+  } catch (error) {
+    console.error('[ReservaController.consultarSeguimientoPublico] Error:', error);
+    return res.status(500).json({
+      error: sanitizarError(error, 'Error al consultar el seguimiento del pedido.')
+    });
+  }
+};
+
+/**
+ * HU-10 Escenario 3: Actualizar el estado de entrega y modalidad (Staff)
+ */
+const actualizarEstadoEntrega = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { modalidadEntrega, estadoEntrega, fechaEstimadaEntrega, guiaCourier, direccionEntrega } = req.body;
+
+    const idReserva = parseInt(id);
+    if (isNaN(idReserva) || idReserva <= 0) {
+      return res.status(400).json({ error: 'ID de reserva inválido.' });
+    }
+
+    const modalidadesValidas = ['RETIRO_FERIA', 'RETIRO_TIENDA', 'ENVIO_LIMA', 'ENVIO_PROVINCIA'];
+    if (modalidadEntrega && !modalidadesValidas.includes(modalidadEntrega)) {
+      return res.status(400).json({
+        error: `Modalidad de entrega no válida. Opciones: ${modalidadesValidas.join(', ')}.`
+      });
+    }
+
+    const estadosValidos = ['PENDIENTE_PREPARACION', 'LISTO_PARA_ENTREGA', 'EN_TRANSITO', 'ENTREGADO'];
+    if (estadoEntrega && !estadosValidos.includes(estadoEntrega)) {
+      return res.status(400).json({
+        error: `Estado de entrega no válido. Opciones: ${estadosValidos.join(', ')}.`
+      });
+    }
+
+    const dataToUpdate = {};
+    if (modalidadEntrega) dataToUpdate.modalidadEntrega = modalidadEntrega;
+    if (estadoEntrega) dataToUpdate.estadoEntrega = estadoEntrega;
+    if (fechaEstimadaEntrega !== undefined) dataToUpdate.fechaEstimadaEntrega = fechaEstimadaEntrega ? new Date(fechaEstimadaEntrega) : null;
+    if (guiaCourier !== undefined) dataToUpdate.guiaCourier = guiaCourier ? guiaCourier.trim() : null;
+    if (direccionEntrega !== undefined) dataToUpdate.direccionEntrega = direccionEntrega ? direccionEntrega.trim() : null;
+
+    // Si la entrega pasa a ENTREGADO, sincronizar inventario si aún no está vendido
+    const resultado = await prisma.$transaction(async (tx) => {
+      const reserva = await tx.reserva.findUnique({
+        where: { id: idReserva }
+      });
+
+      if (!reserva) {
+        const err = new Error('La reserva a actualizar no existe.');
+        err.statusCode = 404;
+        throw err;
+      }
+
+      if (estadoEntrega === 'ENTREGADO') {
+        dataToUpdate.estadoReserva = 'ENTREGADA';
+        if (reserva.idUnidad) {
+          await tx.inventarioUnidad.update({
+            where: { id: reserva.idUnidad },
+            data: { estadoStock: 'VENDIDO' }
+          });
+        }
+      }
+
+      const actualizada = await tx.reserva.update({
+        where: { id: idReserva },
+        data: dataToUpdate,
+        include: {
+          producto: true,
+          unidadInventario: true
+        }
+      });
+
+      return actualizada;
+    });
+
+    return res.status(200).json({
+      mensaje: `Seguimiento de entrega actualizado correctamente para el pedido ${resultado.codigoSeguimiento}.`,
+      reserva: resultado
+    });
+  } catch (error) {
+    console.error('[ReservaController.actualizarEstadoEntrega] Error:', error);
+    const statusCode = error.statusCode || 500;
+    return res.status(statusCode).json({
+      error: sanitizarError(error, 'Error al actualizar el estado de entrega.')
+    });
+  }
+};
+
 module.exports = {
   crearReserva,
   obtenerReservas,
   obtenerMisReservas,
   actualizarEstadoReserva,
   registrarPagoReserva,
-  obtenerHistorialPagos
+  obtenerHistorialPagos,
+  consultarSeguimientoPublico,
+  actualizarEstadoEntrega
 };

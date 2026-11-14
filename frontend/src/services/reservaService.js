@@ -104,5 +104,27 @@ export const reservaService = {
       }
     });
     return handleResponse(res);
+  },
+
+  // HU-10: Consultar seguimiento público de un pedido por código
+  async consultarSeguimientoPublico(codigo) {
+    const res = await fetch(`${API_URL}/seguimiento/${encodeURIComponent(codigo)}`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    return handleResponse(res);
+  },
+
+  // HU-10: Actualizar modalidad y estado de entrega (Staff)
+  async actualizarEntrega(idReserva, payload, token) {
+    const res = await fetch(`${API_URL}/${idReserva}/entrega`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      },
+      body: JSON.stringify(payload)
+    });
+    return handleResponse(res);
   }
 };

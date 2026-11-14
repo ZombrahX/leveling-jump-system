@@ -13,6 +13,7 @@ import MultiReservationModal from './components/MultiReservationModal';
 import VentasPOS from './components/VentasPOS';
 import OrderTrackingModal from './components/OrderTrackingModal';
 import CartAndQuotationModal from './components/CartAndQuotationModal';
+import WaitlistModal from './components/WaitlistModal';
 import { obtenerProductos, crearProducto, actualizarProducto } from './services/productService';
 import { registrarRecepcion } from './services/recepcionService';
 import { authService } from './services/authService';
@@ -58,6 +59,7 @@ export default function App() {
   const [showMultiModal, setShowMultiModal] = useState(false);
   const [showTrackingModal, setShowTrackingModal] = useState(false);
   const [showCartModal, setShowCartModal] = useState(false);
+  const [productoWaitlist, setProductoWaitlist] = useState(null);
 
   // Carrito Comercial (HU-02 & HU-07) con persistencia en localStorage
   const [carrito, setCarrito] = useState(() => {
@@ -539,6 +541,7 @@ export default function App() {
             onAddToCart={addToCart}
             cartCount={carrito.reduce((a, b) => a + b.cantidad, 0)}
             onAbrirCarrito={() => setShowCartModal(true)}
+            onAvisarStock={prod => setProductoWaitlist(prod)}
           />
         </div>
       )}
@@ -678,6 +681,13 @@ export default function App() {
         cart={carrito}
         setCart={setCarrito}
         onClearCart={clearCart}
+      />
+
+      <WaitlistModal
+        isOpen={!!productoWaitlist}
+        producto={productoWaitlist}
+        usuarioActual={usuario}
+        onClose={() => setProductoWaitlist(null)}
       />
     </main>
   );

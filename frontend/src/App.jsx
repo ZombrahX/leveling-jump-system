@@ -10,6 +10,7 @@ import StaffManagement from './components/StaffManagement';
 import LoginModal from './components/LoginModal';
 import ReservationModal from './components/ReservationModal';
 import MultiReservationModal from './components/MultiReservationModal';
+import VentasPOS from './components/VentasPOS';
 import { obtenerProductos, crearProducto, actualizarProducto } from './services/productService';
 import { registrarRecepcion } from './services/recepcionService';
 import { authService } from './services/authService';
@@ -395,7 +396,7 @@ export default function App() {
             <div className="nav-dropdown-wrapper">
               <button
                 type="button"
-                className={`nav-bar-btn has-dropdown ${vista === 'reservas' || vista === 'mis-reservas' ? 'active' : ''}`}
+                className={`nav-bar-btn has-dropdown ${vista === 'reservas' || vista === 'mis-reservas' || vista === 'ventas-pos' ? 'active' : ''}`}
                 onClick={() => toggleDropdown('ventas')}
               >
                 <span>🔖</span> Ventas & Reservas
@@ -403,6 +404,16 @@ export default function App() {
               </button>
               {openDropdown === 'ventas' && (
                 <div className="nav-dropdown-menu">
+                  <div
+                    className={`nav-dropdown-item ${vista === 'ventas-pos' ? 'active' : ''}`}
+                    onClick={() => chooseView('ventas-pos')}
+                  >
+                    <span className="item-icon">💳</span>
+                    <div>
+                      <strong>Punto de Venta Multicanal (POS)</strong>
+                      <small>Caja rápida para Ferias, TikTok Live y Redes</small>
+                    </div>
+                  </div>
                   <div
                     className={`nav-dropdown-item ${vista === 'reservas' ? 'active' : ''}`}
                     onClick={() => chooseView('reservas')}
@@ -533,6 +544,20 @@ export default function App() {
         <div className="single-view">
           <ReceptionForm productos={productos} onSubmit={saveReception} cargando={loading} />
           {error && <div className="alert err">{error}</div>}
+        </div>
+      )}
+
+      {vista === 'ventas-pos' && esStaff && (
+        <div className="single-view">
+          <VentasPOS
+            productos={productos}
+            token={token}
+            usuarioActual={usuario}
+            onVentaCompletada={() => {
+              load();
+              setMsg('¡Venta multicanal registrada con éxito y stock actualizado!');
+            }}
+          />
         </div>
       )}
 

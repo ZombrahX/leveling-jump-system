@@ -6,6 +6,7 @@ const productRoutes = require('./routes/productRoutes');
 const loteRoutes = require('./routes/loteRoutes'); 
 const authRoutes = require('./routes/authRoutes');
 const reservaRoutes = require('./routes/reservaRoutes');
+const ventaRoutes = require('./routes/ventaRoutes');
 
 const app = express();
 
@@ -15,6 +16,7 @@ app.use(express.json());
 app.use('/api', productRoutes);
 app.use('/api', loteRoutes); 
 app.use('/api', reservaRoutes);
+app.use('/api', ventaRoutes);
 app.use('/api/auth', authRoutes); 
 
 app.get('/', (req, res) => {

@@ -41,17 +41,18 @@ export default function VentasPOS({ productos = [], onVentaCompletada, token, us
   const [errorVenta, setErrorVenta] = useState('');
   const [ventaConfirmada, setVentaConfirmada] = useState(null);
 
-  // Estado del Historial de Ventas
+  // Estado del Historial de Ventas (P08: incluye error visible)
   const [historialVentas, setHistorialVentas] = useState([]);
   const [resumenHistorial, setResumenHistorial] = useState({ totalMontoRecaudado: 0, totalUnidadesVendidas: 0 });
   const [cargandoHistorial, setCargandoHistorial] = useState(false);
+  const [errorHistorial, setErrorHistorial] = useState('');
   const [filtroCanalHistorial, setFiltroCanalHistorial] = useState('TODOS');
   const [filtroEstadoHistorial, setFiltroEstadoHistorial] = useState('TODOS');
   const [ventaSeleccionadaModal, setVentaSeleccionadaModal] = useState(null);
   const [anulandoId, setAnulandoId] = useState(null);
   const [motivoAnulacion, setMotivoAnulacion] = useState('');
 
-  // Cargar historial al cambiar a la pestaña de historial
+  // Cargar historial al cambiar a la pestaña de historial o cambiar filtros
   useEffect(() => {
     if (tab === 'historial') {
       cargarHistorial();
@@ -61,6 +62,7 @@ export default function VentasPOS({ productos = [], onVentaCompletada, token, us
   const cargarHistorial = async () => {
     try {
       setCargandoHistorial(true);
+      setErrorHistorial('');
       const res = await ventaService.obtenerVentas(
         { canal: filtroCanalHistorial, estado: filtroEstadoHistorial },
         token
@@ -69,6 +71,8 @@ export default function VentasPOS({ productos = [], onVentaCompletada, token, us
       setResumenHistorial(res.resumen || { totalMontoRecaudado: 0, totalUnidadesVendidas: 0 });
     } catch (err) {
       console.error('Error cargando historial de ventas:', err);
+      // P08: Mostrar error visible en interfaz
+      setErrorHistorial(err.message || 'Error de conexión al obtener el historial de ventas.');
     } finally {
       setCargandoHistorial(false);
     }
@@ -121,7 +125,7 @@ export default function VentasPOS({ productos = [], onVentaCompletada, token, us
     });
   };
 
-  // Actualizar cantidad en carrito
+  // Actualizar cantidad en carrito (P03: entero positivo estricto)
   const actualizarCantidad = (idProducto, nuevaCantidad) => {
     setErrorVenta('');
     setCarrito(prev => {
@@ -132,7 +136,7 @@ export default function VentasPOS({ productos = [], onVentaCompletada, token, us
             return item;
           }
           if (nuevaCantidad <= 0) return null;
-          return { ...item, cantidad: nuevaCantidad };
+          return { ...item, cantidad: Math.floor(nuevaCantidad) };
         }
         return item;
       }).filter(Boolean);
@@ -155,7 +159,7 @@ export default function VentasPOS({ productos = [], onVentaCompletada, token, us
     return carrito.reduce((acc, item) => acc + (item.precio * item.cantidad), 0);
   }, [carrito]);
 
-  // Enviar Venta
+  // Enviar Venta (P09: emite evento con tipo)
   const handleRegistrarVenta = async (e) => {
     e.preventDefault();
     setErrorVenta('');
@@ -189,8 +193,9 @@ export default function VentasPOS({ productos = [], onVentaCompletada, token, us
       setEmailCliente('');
       setObservaciones('');
 
+      // P09: Notificar al padre con el tipo de evento
       if (onVentaCompletada) {
-        onVentaCompletada();
+        onVentaCompletada({ tipo: 'VENTA_REGISTRADA', codigo: respuesta.venta.codigoVenta });
       }
     } catch (err) {
       console.error('Error al registrar venta:', err);
@@ -200,10 +205,10 @@ export default function VentasPOS({ productos = [], onVentaCompletada, token, us
     }
   };
 
-  // Anular Venta
+  // Anular Venta (P06: motivo obligatorio, P09: evento diferenciado)
   const handleAnularVenta = async (idVenta) => {
-    if (!motivoAnulacion.trim()) {
-      alert('Por favor ingrese el motivo de la anulación.');
+    if (!motivoAnulacion || !motivoAnulacion.trim()) {
+      alert('El motivo de anulación es obligatorio para registrar la auditoría.');
       return;
     }
     try {
@@ -214,7 +219,11 @@ export default function VentasPOS({ productos = [], onVentaCompletada, token, us
       setMotivoAnulacion('');
       setVentaSeleccionadaModal(null);
       cargarHistorial();
-      if (onVentaCompletada) onVentaCompletada();
+
+      // P09: Notificar evento específico de anulación
+      if (onVentaCompletada) {
+        onVentaCompletada({ tipo: 'VENTA_ANULADA', id: idVenta });
+      }
     } catch (err) {
       alert(err.message || 'Error al anular la venta.');
     } finally {
@@ -766,6 +775,40 @@ export default function VentasPOS({ productos = [], onVentaCompletada, token, us
             </button>
           </div>
 
+          {/* P08: Mensaje visible de error en historial */}
+          {errorHistorial && (
+            <div style={{
+              background: '#FEE2E2',
+              border: '1px solid #F87171',
+              color: '#991B1B',
+              padding: '12px 16px',
+              borderRadius: '8px',
+              fontSize: '13px',
+              marginBottom: '16px',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}>
+              <div>⚠️ {errorHistorial}</div>
+              <button
+                type="button"
+                onClick={cargarHistorial}
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: '6px',
+                  border: '1px solid #DC2626',
+                  background: '#FFFFFF',
+                  color: '#DC2626',
+                  fontWeight: 700,
+                  fontSize: '12px',
+                  cursor: 'pointer'
+                }}
+              >
+                Reintentar
+              </button>
+            </div>
+          )}
+
           {/* Tabla de Historial */}
           {cargandoHistorial ? (
             <div style={{ textAlign: 'center', padding: '40px', color: '#64748B' }}>Cargando historial de ventas...</div>
@@ -843,7 +886,7 @@ export default function VentasPOS({ productos = [], onVentaCompletada, token, us
                     );
                   })}
 
-                  {historialVentas.length === 0 && (
+                  {historialVentas.length === 0 && !errorHistorial && (
                     <tr>
                       <td colSpan="9" style={{ textAlign: 'center', padding: '30px', color: '#94A3B8' }}>
                         No hay ventas registradas con los filtros seleccionados.
@@ -923,9 +966,9 @@ export default function VentasPOS({ productos = [], onVentaCompletada, token, us
                     <div style={{ fontWeight: 700, color: '#0F172A' }}>
                       {d.cantidad}x {d.producto?.nombre} (S/ {Number(d.subtotal).toFixed(2)})
                     </div>
-                    {d.unidadesVendidas?.length > 0 && (
+                    {(d.seriesVendidas || d.unidadesVendidas?.length > 0) && (
                       <div style={{ fontSize: '11px', color: '#0891B2', marginTop: '2px' }}>
-                        Series: {d.unidadesVendidas.map(u => u.codigoSerie).join(', ')}
+                        Series: {d.seriesVendidas || d.unidadesVendidas?.map(u => u.codigoSerie).join(', ')}
                       </div>
                     )}
                   </div>
@@ -1022,29 +1065,36 @@ export default function VentasPOS({ productos = [], onVentaCompletada, token, us
               <div><strong>Estado:</strong> {ventaSeleccionadaModal.estado}</div>
               <div><strong>Cliente / Ref:</strong> {ventaSeleccionadaModal.clienteRef || '—'}</div>
               <div><strong>Vendedor:</strong> {ventaSeleccionadaModal.vendedor?.nombre || 'Staff'}</div>
+              {ventaSeleccionadaModal.observaciones && (
+                <div style={{ gridColumn: '1 / -1', marginTop: '4px', color: '#64748B' }}>
+                  <strong>Observaciones / Auditoría:</strong> {ventaSeleccionadaModal.observaciones}
+                </div>
+              )}
             </div>
 
             <h4 style={{ margin: '0 0 8px 0', fontSize: '13px', color: '#475569' }}>Productos y Unidades Incluidas:</h4>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '20px' }}>
-              {ventaSeleccionadaModal.detalles?.map(d => (
-                <div key={d.id} style={{ border: '1px solid #E2E8F0', borderRadius: '6px', padding: '10px', fontSize: '12px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700 }}>
-                    <span>{d.cantidad}x {d.producto?.nombre}</span>
-                    <span>S/ {Number(d.subtotal).toFixed(2)}</span>
-                  </div>
-                  <div style={{ color: '#64748B', fontSize: '11px', marginTop: '2px' }}>
-                    Precio unitario: S/ {Number(d.precioUnitario).toFixed(2)}
-                  </div>
-                  {d.unidadesVendidas?.length > 0 && (
-                    <div style={{ marginTop: '4px', color: '#0891B2', fontWeight: 600 }}>
-                      Series de almacén: {d.unidadesVendidas.map(u => u.codigoSerie).join(', ')}
+              {ventaSeleccionadaModal.detalles?.map(d => {
+                const seriesTexto = d.seriesVendidas || (d.unidadesVendidas?.length > 0 ? d.unidadesVendidas.map(u => u.codigoSerie).join(', ') : 'Liberadas tras anulación');
+                return (
+                  <div key={d.id} style={{ border: '1px solid #E2E8F0', borderRadius: '6px', padding: '10px', fontSize: '12px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700 }}>
+                      <span>{d.cantidad}x {d.producto?.nombre}</span>
+                      <span>S/ {Number(d.subtotal).toFixed(2)}</span>
                     </div>
-                  )}
-                </div>
-              ))}
+                    <div style={{ color: '#64748B', fontSize: '11px', marginTop: '2px' }}>
+                      Precio unitario: S/ {Number(d.precioUnitario).toFixed(2)}
+                    </div>
+                    {/* P05: Trazabilidad inmutable de series */}
+                    <div style={{ marginTop: '4px', color: '#0891B2', fontWeight: 600 }}>
+                      Series físicas: {seriesTexto}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
 
-            {/* Opción de anular si está completada */}
+            {/* Opción de anular si está completada (P06: motivo obligatorio) */}
             {ventaSeleccionadaModal.estado === 'COMPLETADA' && (
               <div style={{ borderTop: '1px solid #E2E8F0', paddingTop: '16px' }}>
                 {anulandoId !== ventaSeleccionadaModal.id ? (
@@ -1068,11 +1118,11 @@ export default function VentasPOS({ productos = [], onVentaCompletada, token, us
                 ) : (
                   <div style={{ background: '#FEF2F2', padding: '12px', borderRadius: '8px', border: '1px solid #FCA5A5' }}>
                     <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#991B1B', marginBottom: '4px' }}>
-                      Motivo de Anulación:
+                      Motivo de Anulación * (Obligatorio para auditoría):
                     </label>
                     <input
                       type="text"
-                      placeholder="Ej: Error en medio de pago, cliente desistió..."
+                      placeholder="Ej: Error en medio de pago, cliente desistió de la compra..."
                       value={motivoAnulacion}
                       onChange={(e) => setMotivoAnulacion(e.target.value)}
                       style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '12px', marginBottom: '8px', boxSizing: 'border-box' }}
@@ -1081,17 +1131,17 @@ export default function VentasPOS({ productos = [], onVentaCompletada, token, us
                       <button
                         type="button"
                         onClick={() => handleAnularVenta(ventaSeleccionadaModal.id)}
-                        disabled={procesando}
+                        disabled={procesando || !motivoAnulacion.trim()}
                         style={{
                           flex: 1,
                           padding: '8px',
                           borderRadius: '6px',
                           border: 'none',
-                          background: '#DC2626',
+                          background: (!motivoAnulacion.trim() || procesando) ? '#94A3B8' : '#DC2626',
                           color: '#FFFFFF',
                           fontWeight: 700,
                           fontSize: '12px',
-                          cursor: 'pointer'
+                          cursor: (!motivoAnulacion.trim() || procesando) ? 'not-allowed' : 'pointer'
                         }}
                       >
                         {procesando ? 'Anulando...' : 'Confirmar Anulación'}

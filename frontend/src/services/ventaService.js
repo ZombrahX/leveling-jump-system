@@ -5,14 +5,18 @@ const API_URL = `${API_BASE_URL}/api/ventas`;
 async function handleResponse(res) {
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error(data.error || 'Error al procesar la operación de venta.');
+    const error = new Error(data.error || 'Error al procesar la operación de venta.');
+    error.status = res.status;
+    error.statusCode = res.status;
+    error.data = data;
+    throw error;
   }
   return data;
 }
 
 export const ventaService = {
   /**
-   * HU-05: Registrar una venta multicanal
+   * HU-05 / PTLJ-3: Registrar una venta multicanal
    * @param {Object} payload { canal, medioPago, clienteRef, telefonoCliente, emailCliente, observaciones, items: [{ idProducto, cantidad, precioUnitario }] }
    * @param {string} token JWT del staff
    */
@@ -29,7 +33,7 @@ export const ventaService = {
   },
 
   /**
-   * HU-05: Consultar el historial de ventas
+   * HU-05: Consultar el historial de ventas con filtros
    * @param {Object} filtros { canal, estado, fechaInicio, fechaFin }
    * @param {string} token JWT del staff
    */
@@ -52,7 +56,7 @@ export const ventaService = {
   },
 
   /**
-   * Obtener detalle de una venta por ID
+   * Obtener detalle de una venta por ID o Código
    */
   async obtenerVentaPorId(id, token) {
     const res = await fetch(`${API_URL}/${id}`, {

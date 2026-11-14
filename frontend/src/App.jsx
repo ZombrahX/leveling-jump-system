@@ -553,11 +553,24 @@ export default function App() {
             productos={productos}
             token={token}
             usuarioActual={usuario}
-            onVentaCompletada={() => {
+            onVentaCompletada={(evento) => {
               load();
-              setMsg('¡Venta multicanal registrada con éxito y stock actualizado!');
+              if (evento && evento.tipo === 'VENTA_ANULADA') {
+                setMsg('¡Venta anulada con éxito y stock devuelto a Disponible!');
+              } else {
+                setMsg('¡Venta multicanal registrada con éxito y stock actualizado!');
+              }
             }}
           />
+        </div>
+      )}
+
+      {/* P10: Protección explícita para usuarios sin privilegios de staff */}
+      {vista === 'ventas-pos' && !esStaff && (
+        <div className="single-view">
+          <div className="alert err">
+            ⚠️ Acceso denegado: El Punto de Venta Multicanal (POS) es un módulo exclusivo para el Staff administrativo (Superadmin y Admin).
+          </div>
         </div>
       )}
 

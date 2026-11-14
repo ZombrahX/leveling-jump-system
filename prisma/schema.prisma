@@ -260,6 +260,7 @@ model VentaDetalle {
   cantidad         Int                @default(1) @map("cantidad")
   precioUnitario   Decimal            @map("precio_unitario") @db.Decimal(10, 2)
   subtotal         Decimal            @map("subtotal") @db.Decimal(10, 2)
+  seriesVendidas   String?            @map("series_vendidas") @db.Text // P05: Trazabilidad inmutable de series fisicas vendidas
 
   // Relaciones
   venta            Venta              @relation(fields: [idVenta], references: [id], onDelete: Cascade)

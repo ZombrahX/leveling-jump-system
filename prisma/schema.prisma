@@ -95,6 +95,7 @@ model Producto {
   unidadesInventario InventarioUnidad[]
   reservas           Reserva[]
   ventasDetalle      VentaDetalle[]
+  cotizacionesDetalle CotizacionDetalle[]
 
   @@unique([nombre, marca, escala, serie], name: "unique_producto_version") // RN-HU03-05: Prevención de duplicados
   @@index([nombre], name: "idx_producto_nombre")                             // RN-HU03-06: Búsqueda rápida
@@ -325,4 +326,40 @@ enum EstadoEntrega {
   LISTO_PARA_ENTREGA    // Listo para recojo en feria o entrega
   EN_TRANSITO           // En courier o camino a la feria
   ENTREGADO             // Entregado físicamente al cliente
+}
+
+// ----------------------------------------------------
+// HU-07: SOLICITAR COTIZACIÓN FORMAL
+// ----------------------------------------------------
+model Cotizacion {
+  id               Int                 @id @default(autoincrement()) @map("id_cotizacion")
+  codigoCotizacion String              @unique @map("codigo_cotizacion") @db.VarChar(30) // COT-2026-0001
+  nombreCliente    String              @map("nombre_cliente") @db.VarChar(150)
+  emailCliente     String?             @map("email_cliente") @db.VarChar(150)
+  telefonoCliente  String              @map("telefono_cliente") @db.VarChar(25)
+  total            Decimal             @map("total_soles") @db.Decimal(10, 2)
+  fechaEmision     DateTime            @default(now()) @map("fecha_emision")
+  fechaVencimiento DateTime            @map("fecha_vencimiento") // 7 días de vigencia comercial
+  observaciones    String?             @map("observaciones") @db.Text
+  items            CotizacionDetalle[]
+
+  @@index([codigoCotizacion], name: "idx_cotizacion_codigo")
+  @@index([fechaEmision], name: "idx_cotizacion_fecha")
+  @@map("cotizaciones")
+}
+
+model CotizacionDetalle {
+  id              Int        @id @default(autoincrement()) @map("id_cotizacion_detalle")
+  idCotizacion    Int        @map("id_cotizacion")
+  idProducto      Int        @map("id_producto")
+  nombreProducto  String     @map("nombre_producto") @db.VarChar(150)
+  cantidad        Int        @map("cantidad")
+  precioUnitario  Decimal    @map("precio_unitario") @db.Decimal(10, 2)
+  subtotal        Decimal    @map("subtotal") @db.Decimal(10, 2)
+
+  cotizacion      Cotizacion @relation(fields: [idCotizacion], references: [id], onDelete: Cascade)
+  producto        Producto   @relation(fields: [idProducto], references: [id], onDelete: Restrict)
+
+  @@index([idCotizacion], name: "idx_cotizacion_detalle_cotizacion")
+  @@map("cotizaciones_detalle")
 }

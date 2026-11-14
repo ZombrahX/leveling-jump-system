@@ -12,6 +12,7 @@ import ReservationModal from './components/ReservationModal';
 import MultiReservationModal from './components/MultiReservationModal';
 import VentasPOS from './components/VentasPOS';
 import OrderTrackingModal from './components/OrderTrackingModal';
+import CartAndQuotationModal from './components/CartAndQuotationModal';
 import { obtenerProductos, crearProducto, actualizarProducto } from './services/productService';
 import { registrarRecepcion } from './services/recepcionService';
 import { authService } from './services/authService';
@@ -56,6 +57,36 @@ export default function App() {
   const [productoReserva, setProductoReserva] = useState(null);
   const [showMultiModal, setShowMultiModal] = useState(false);
   const [showTrackingModal, setShowTrackingModal] = useState(false);
+  const [showCartModal, setShowCartModal] = useState(false);
+
+  // Carrito Comercial (HU-02 & HU-07) con persistencia en localStorage
+  const [carrito, setCarrito] = useState(() => {
+    try {
+      const saved = localStorage.getItem('lj_carrito_comercial');
+      if (saved) return JSON.parse(saved);
+    } catch (_) {}
+    return [];
+  });
+
+  const addToCart = (prod) => {
+    setCarrito(prev => {
+      const exist = prev.find(i => i.id === prod.id);
+      let updated;
+      if (exist) {
+        updated = prev.map(i => i.id === prod.id ? { ...i, cantidad: i.cantidad + 1 } : i);
+      } else {
+        updated = [...prev, { id: prod.id, nombre: prod.nombre, precio: prod.precio, cantidad: 1 }];
+      }
+      try { localStorage.setItem('lj_carrito_comercial', JSON.stringify(updated)); } catch (_) {}
+      return updated;
+    });
+    setMsg(`"${prod.nombre}" añadido al carrito.`);
+  };
+
+  const clearCart = () => {
+    setCarrito([]);
+    try { localStorage.removeItem('lj_carrito_comercial'); } catch (_) {}
+  };
 
   // Bolsa de Reserva (Reservas en Masa) con persistencia en localStorage
   const [bolsaReservas, setBolsaReservas] = useState(() => {
@@ -320,6 +351,13 @@ export default function App() {
             >
               <span>📍</span> Rastrear Pedido (HU-10)
             </button>
+            <button
+              className="nav-bar-btn"
+              onClick={() => setShowCartModal(true)}
+              title="HU-02 / HU-07: Carrito de compras y solicitud de cotizaciones formales"
+            >
+              <span>🛒</span> Carrito / Cotizar {carrito.length > 0 && `(${carrito.reduce((a, b) => a + b.cantidad, 0)})`}
+            </button>
             {usuario && (
               <>
                 <button
@@ -498,6 +536,9 @@ export default function App() {
             bolsa={bolsaReservas}
             onToggleBolsa={toggleBolsa}
             onAbrirBolsa={() => setShowMultiModal(true)}
+            onAddToCart={addToCart}
+            cartCount={carrito.reduce((a, b) => a + b.cantidad, 0)}
+            onAbrirCarrito={() => setShowCartModal(true)}
           />
         </div>
       )}
@@ -629,6 +670,14 @@ export default function App() {
       <OrderTrackingModal
         isOpen={showTrackingModal}
         onClose={() => setShowTrackingModal(false)}
+      />
+
+      <CartAndQuotationModal
+        isOpen={showCartModal}
+        onClose={() => setShowCartModal(false)}
+        cart={carrito}
+        setCart={setCarrito}
+        onClearCart={clearCart}
       />
     </main>
   );

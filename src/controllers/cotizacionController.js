@@ -58,6 +58,40 @@ const crearCotizacion = async (req, res) => {
 
     const prodDict = new Map(productosDB.map(p => [p.id, p]));
 
+    // HU07-P01: Comprobar disponibilidad real en inventario antes de confirmar la cotización
+    for (const [idProd, cant] of itemMap.entries()) {
+      const prod = prodDict.get(idProd);
+      if (prod.estado !== 'ACTIVO') {
+        return res.status(400).json({
+          error: `El producto "${prod.nombre}" no se encuentra activo para cotización comercial.`
+        });
+      }
+
+      const unidadesDisponibles = await prisma.inventarioUnidad.count({
+        where: {
+          idProducto: idProd,
+          estadoStock: 'DISPONIBLE',
+          reservas: {
+            none: {
+              estadoReserva: { in: ['PENDIENTE', 'CONFIRMADA'] }
+            }
+          }
+        }
+      });
+
+      if (unidadesDisponibles === 0) {
+        return res.status(409).json({
+          error: `No se puede emitir la cotización: El producto "${prod.nombre}" se encuentra actualmente agotado en almacén.`
+        });
+      }
+
+      if (unidadesDisponibles < cant) {
+        return res.status(409).json({
+          error: `Disponibilidad insuficiente para cotizar "${prod.nombre}". Solicitó ${cant} unidad(es), pero solo hay ${unidadesDisponibles} disponible(s) en este momento.`
+        });
+      }
+    }
+
     let totalCotizacion = 0;
     const detallesData = [];
 
@@ -145,8 +179,26 @@ const obtenerCotizacionPorCodigo = async (req, res) => {
     const ahora = new Date();
     const vigente = ahora <= new Date(cotizacion.fechaVencimiento);
 
+    // HU07-P04: Protección de privacidad de datos personales en consulta pública
+    const enmascararTelefono = (tel) => {
+      if (!tel || tel.length < 5) return tel;
+      return tel.slice(0, 3) + ' *** ' + tel.slice(-2);
+    };
+
+    const enmascararEmail = (email) => {
+      if (!email || !email.includes('@')) return email;
+      const [u, d] = email.split('@');
+      return u.slice(0, 2) + '***@' + d;
+    };
+
+    const cotizacionProtegida = {
+      ...cotizacion,
+      telefonoCliente: enmascararTelefono(cotizacion.telefonoCliente),
+      emailCliente: enmascararEmail(cotizacion.emailCliente)
+    };
+
     return res.status(200).json({
-      cotizacion,
+      cotizacion: cotizacionProtegida,
       vigente,
       diasRestantes: Math.max(0, Math.ceil((new Date(cotizacion.fechaVencimiento) - ahora) / (1000 * 60 * 60 * 24))),
       avisoLegal: 'Nota: La cotización comercial no reserva stock físico.'

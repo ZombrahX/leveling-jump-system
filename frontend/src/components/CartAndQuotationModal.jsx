@@ -96,7 +96,7 @@ export default function CartAndQuotationModal({ isOpen, onClose, cart, setCart, 
     const msg = encodeURIComponent(
       `¡Hola Leveling Jump! Solicito confirmar mi cotización oficial *${cotizacionGenerada.codigoCotizacion}* por un total de *S/ ${parseFloat(cotizacionGenerada.total).toFixed(2)}* emitida a nombre de ${cotizacionGenerada.nombreCliente}.`
     );
-    window.open(`https://wa.me/51999999999?text=${msg}`, '_blank');
+    window.open(`https://wa.me/51988888777?text=${msg}`, '_blank');
   };
 
   return (
@@ -225,19 +225,15 @@ export default function CartAndQuotationModal({ isOpen, onClose, cart, setCart, 
                   {/* Resumen de totales */}
                   <div className="p-4 bg-slate-950/60 rounded-xl border border-slate-800 space-y-2">
                     <div className="flex justify-between text-slate-400 text-sm">
-                      <span>Subtotal estimado:</span>
-                      <span>S/ {(totalCarrito / 1.18).toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between text-slate-400 text-sm">
-                      <span>IGV (18% incluido):</span>
-                      <span>S/ {(totalCarrito - totalCarrito / 1.18).toFixed(2)}</span>
+                      <span>Moneda comercial:</span>
+                      <span className="font-semibold text-slate-300">PEN (Soles peruanos S/)</span>
                     </div>
                     <div className="flex justify-between text-white font-bold text-lg pt-2 border-t border-slate-800">
-                      <span>Total General:</span>
+                      <span>Importe Total:</span>
                       <span className="text-emerald-400 font-mono">S/ {totalCarrito.toFixed(2)}</span>
                     </div>
                     <p className="text-xs text-amber-400/90 pt-1">
-                      ℹ️ El carrito no bloquea unidades físicas en almacén. Para congelar precio y stock, genera una cotización o procede a reserva.
+                      ℹ️ El carrito es una selección temporal y no bloquea inventario. La cotización formal verifica stock activo antes de emitirse y congela precios por 7 días.
                     </p>
                   </div>
 

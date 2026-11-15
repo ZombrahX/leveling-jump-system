@@ -543,11 +543,10 @@ const consultarSeguimientoPublico = async (req, res) => {
       ENTREGADO: 'Entregado al comprador'
     };
 
-    // HU-10 Escenario 1: Información estructurada con fecha estimada y modalidad
+    // HU-10 Escenario 1 & HU10-P01: Información estructurada con fecha estimada y modalidad protegida de datos financieros/series privadas
     return res.status(200).json({
       codigoSeguimiento: reserva.codigoSeguimiento,
       estadoReserva: reserva.estadoReserva,
-      estadoPago: reserva.estadoPago,
       estadoEntrega: reserva.estadoEntrega,
       estadoEntregaDescripcion: estadosEntregaTexto[reserva.estadoEntrega] || reserva.estadoEntrega,
       modalidadEntrega: reserva.modalidadEntrega,
@@ -555,11 +554,7 @@ const consultarSeguimientoPublico = async (req, res) => {
       fechaEstimadaEntrega: reserva.fechaEstimadaEntrega,
       guiaCourier: reserva.guiaCourier,
       fechaReserva: reserva.fechaReserva,
-      montoTotal: Number(reserva.montoTotal),
-      montoAdelanto: Number(reserva.montoAdelanto),
-      saldoPendiente: Number(reserva.saldoPendiente),
-      producto: reserva.producto,
-      serieAsignada: reserva.unidadInventario ? reserva.unidadInventario.codigoSerie : null
+      producto: reserva.producto
     });
   } catch (error) {
     console.error('[ReservaController.consultarSeguimientoPublico] Error:', error);
@@ -596,6 +591,14 @@ const actualizarEstadoEntrega = async (req, res) => {
       });
     }
 
+    // HU10-P04: Validar fecha estimada de entrega
+    if (fechaEstimadaEntrega) {
+      const fParsed = new Date(fechaEstimadaEntrega);
+      if (isNaN(fParsed.getTime())) {
+        return res.status(400).json({ error: 'La fecha estimada de entrega proporcionada no es válida.' });
+      }
+    }
+
     const dataToUpdate = {};
     if (modalidadEntrega) dataToUpdate.modalidadEntrega = modalidadEntrega;
     if (estadoEntrega) dataToUpdate.estadoEntrega = estadoEntrega;
@@ -612,6 +615,20 @@ const actualizarEstadoEntrega = async (req, res) => {
       if (!reserva) {
         const err = new Error('La reserva a actualizar no existe.');
         err.statusCode = 404;
+        throw err;
+      }
+
+      // HU10-P02: Impedir despacho/entrega en reservas canceladas o expiradas
+      if (reserva.estadoReserva === 'CANCELADA' || reserva.estadoReserva === 'EXPIRADA') {
+        const err = new Error(`No se puede modificar la entrega de una reserva que se encuentra ${reserva.estadoReserva}.`);
+        err.statusCode = 400;
+        throw err;
+      }
+
+      // HU10-P03: Evitar transiciones inválidas desde ENTREGADO
+      if (reserva.estadoEntrega === 'ENTREGADO' && estadoEntrega && estadoEntrega !== 'ENTREGADO') {
+        const err = new Error('Operación inválida: El pedido ya fue registrado como ENTREGADO. No se puede revertir el estado de entrega.');
+        err.statusCode = 400;
         throw err;
       }
 

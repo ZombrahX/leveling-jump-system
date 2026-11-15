@@ -29,18 +29,41 @@ const crearCotizacion = async (req, res) => {
       return res.status(400).json({ error: 'Debe incluir al menos un producto en la cotización.' });
     }
 
-    // Validar y consolidar cantidades de productos
+    // Validar y consolidar cantidades de productos estrictamente (HU07-P02: sin parseInt)
     const itemMap = new Map();
-    for (const item of items) {
-      const idProd = parseInt(item.idProducto);
-      const cant = parseInt(item.cantidad);
-
-      if (isNaN(idProd) || idProd <= 0) {
-        return res.status(400).json({ error: 'ID de producto inválido en la lista.' });
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (!item || typeof item !== 'object') {
+        return res.status(400).json({ error: `El ítem en la posición ${i + 1} no es válido.` });
       }
 
+      // Validar idProducto estricto
+      const rawId = item.idProducto;
+      if (typeof rawId === 'string' && !/^\d+$/.test(rawId.trim())) {
+        return res.status(400).json({ error: `ID de producto inválido en la línea ${i + 1} (recibido: "${rawId}").` });
+      }
+      const idProd = Number(rawId);
+      if (!Number.isInteger(idProd) || idProd <= 0) {
+        return res.status(400).json({ error: `ID de producto inválido en la línea ${i + 1}.` });
+      }
+
+      // HU07-P02: Validar cantidad estricta sin parseInt truncador (rechazar 2.5, 2abc, etc.)
+      const rawCant = item.cantidad;
+      if (rawCant === undefined || rawCant === null || typeof rawCant === 'boolean') {
+        return res.status(400).json({ error: `La cantidad es obligatoria para el producto en la línea ${i + 1}.` });
+      }
+
+      if (typeof rawCant === 'string' && !/^\d+$/.test(rawCant.trim())) {
+        return res.status(400).json({
+          error: `La cantidad para el producto ID ${idProd} debe ser un número entero positivo sin decimales ni caracteres (recibido: "${rawCant}").`
+        });
+      }
+
+      const cant = Number(rawCant);
       if (!Number.isInteger(cant) || cant <= 0) {
-        return res.status(400).json({ error: 'La cantidad debe ser un entero positivo.' });
+        return res.status(400).json({
+          error: `La cantidad para el producto ID ${idProd} debe ser un entero positivo mayor a cero (recibido: "${rawCant}").`
+        });
       }
 
       itemMap.set(idProd, (itemMap.get(idProd) || 0) + cant);
@@ -179,26 +202,31 @@ const obtenerCotizacionPorCodigo = async (req, res) => {
     const ahora = new Date();
     const vigente = ahora <= new Date(cotizacion.fechaVencimiento);
 
-    // HU07-P04: Protección de privacidad de datos personales en consulta pública
-    const enmascararTelefono = (tel) => {
-      if (!tel || tel.length < 5) return tel;
-      return tel.slice(0, 3) + ' *** ' + tel.slice(-2);
+    // HU07-P04 & Punto 5 de Brian: Limitar estrictamente los datos de la respuesta pública
+    const enmascararNombre = (nom) => {
+      if (!nom) return 'Cliente';
+      const partes = nom.trim().split(/\s+/);
+      if (partes.length === 1) return partes[0];
+      return `${partes[0]} ${partes[1].charAt(0)}.`;
     };
 
-    const enmascararEmail = (email) => {
-      if (!email || !email.includes('@')) return email;
-      const [u, d] = email.split('@');
-      return u.slice(0, 2) + '***@' + d;
-    };
-
-    const cotizacionProtegida = {
-      ...cotizacion,
-      telefonoCliente: enmascararTelefono(cotizacion.telefonoCliente),
-      emailCliente: enmascararEmail(cotizacion.emailCliente)
+    const cotizacionPublica = {
+      codigoCotizacion: cotizacion.codigoCotizacion,
+      clienteReferencia: enmascararNombre(cotizacion.nombreCliente),
+      fechaEmision: cotizacion.fechaEmision,
+      fechaVencimiento: cotizacion.fechaVencimiento,
+      total: parseFloat(cotizacion.total),
+      items: cotizacion.items.map(it => ({
+        idProducto: it.idProducto,
+        nombreProducto: it.nombreProducto,
+        cantidad: it.cantidad,
+        precioUnitario: parseFloat(it.precioUnitario),
+        subtotal: parseFloat(it.subtotal)
+      }))
     };
 
     return res.status(200).json({
-      cotizacion: cotizacionProtegida,
+      cotizacion: cotizacionPublica,
       vigente,
       diasRestantes: Math.max(0, Math.ceil((new Date(cotizacion.fechaVencimiento) - ahora) / (1000 * 60 * 60 * 24))),
       avisoLegal: 'Nota: La cotización comercial no reserva stock físico.'

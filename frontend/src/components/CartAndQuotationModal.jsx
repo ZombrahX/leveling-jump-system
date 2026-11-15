@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { cotizacionService } from '../services/cotizacionService';
 
-export default function CartAndQuotationModal({ isOpen, onClose, cart, setCart, onClearCart }) {
+export default function CartAndQuotationModal({ isOpen, onClose, cart, setCart, onClearCart, onProcederReserva }) {
   const [activeTab, setActiveTab] = useState('cart'); // 'cart', 'consultar', 'resultado'
   const [nombre, setNombre] = useState('');
   const [telefono, setTelefono] = useState('');
@@ -235,6 +235,18 @@ export default function CartAndQuotationModal({ isOpen, onClose, cart, setCart, 
                     <p className="text-xs text-amber-400/90 pt-1">
                       ℹ️ El carrito es una selección temporal y no bloquea inventario. La cotización formal verifica stock activo antes de emitirse y congela precios por 7 días.
                     </p>
+                  </div>
+
+                  {/* HU-02 Punto 7: Opciones de confirmación desde el carrito (Reserva Múltiple vs Cotización) */}
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <button
+                      type="button"
+                      onClick={() => onProcederReserva && onProcederReserva(cart)}
+                      className="flex-1 bg-cyan-700 hover:bg-cyan-600 text-white font-medium py-2.5 px-4 rounded-xl transition flex items-center justify-center gap-2 text-sm shadow-md"
+                      title="Confirmar estos productos como una reserva comercial con código RES (HU-06)"
+                    >
+                      <span>🔖</span> Confirmar Selección como Reserva Múltiple (HU-06)
+                    </button>
                   </div>
 
                   {/* Formulario de Cotización Formal (HU-07) */}

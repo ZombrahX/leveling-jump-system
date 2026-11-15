@@ -678,6 +678,15 @@ export default function App() {
         cart={carrito}
         setCart={setCarrito}
         onClearCart={clearCart}
+        onProcederReserva={(items) => {
+          const prods = items.map(it => {
+            const pOrig = productos.find(p => p.id === it.id);
+            return pOrig || it;
+          });
+          setBolsaReservas(prods);
+          setShowCartModal(false);
+          setShowMultiModal(true);
+        }}
       />
     </main>
   );

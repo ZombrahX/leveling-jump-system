@@ -62,7 +62,7 @@ const registrarInteres = async (req, res) => {
       });
     }
 
-    // Prevención de duplicados (CA2 / HU08-P06)
+    // Prevención de duplicados y reactivación de cancelados/convertidos (CA2 / HU08-P04 / HU08-P06)
     const interesExistente = await prisma.interesProducto.findFirst({
       where: {
         idProducto: idProd,
@@ -71,8 +71,30 @@ const registrarInteres = async (req, res) => {
     });
 
     if (interesExistente) {
-      return res.status(409).json({
-        error: `Ya registraste tu interés en "${producto.nombre}". Te contactaremos apenas exista disponibilidad.`
+      if (['PENDIENTE', 'NOTIFICADO'].includes(interesExistente.estado)) {
+        return res.status(409).json({
+          error: `Ya te encuentras registrado en la lista de espera de "${producto.nombre}". Te contactaremos apenas exista disponibilidad.`
+        });
+      }
+
+      // HU08-P04: Si el interés previo fue CANCELADO o CONVERTIDO_RESERVA, se reactiva con nueva fecha
+      const interesReactivado = await prisma.interesProducto.update({
+        where: { id: interesExistente.id },
+        data: {
+          nombreCliente: nombreCliente.trim(),
+          emailCliente: emailCliente ? emailCliente.trim() : null,
+          notas: notas ? notas.trim() : null,
+          estado: 'PENDIENTE',
+          fechaRegistro: new Date()
+        },
+        include: {
+          producto: { select: { nombre: true, marca: true, precio: true } }
+        }
+      });
+
+      return res.status(200).json({
+        mensaje: `¡Tu solicitud en lista de espera para "${producto.nombre}" ha sido reactivada con éxito!`,
+        interes: interesReactivado
       });
     }
 
@@ -95,6 +117,11 @@ const registrarInteres = async (req, res) => {
     });
   } catch (error) {
     console.error('[InteresController.registrarInteres] Error:', error);
+    if (error.code === 'P2002') {
+      return res.status(409).json({
+        error: 'Ya existe una solicitud activa en lista de espera con este número de teléfono para este producto.'
+      });
+    }
     const statusCode = error.statusCode || 500;
     return res.status(statusCode).json({
       error: sanitizarError(error, 'Error al registrar tu interés en el producto.')

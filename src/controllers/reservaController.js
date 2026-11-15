@@ -340,11 +340,23 @@ const registrarPagoReserva = async (req, res) => {
       return res.status(400).json({ error: 'ID de reserva inválido.' });
     }
 
-    // Validar monto
+    // HU09-P03: Validar precisión monetaria estricta (máximo 2 decimales, no negativos ni strings raros)
+    if (typeof monto === 'string' && !/^\d+(\.\d{1,2})?$/.test(monto.trim())) {
+      return res.status(400).json({
+        error: `El monto del abono debe ser un número positivo con máximo 2 decimales (recibido: "${monto}").`
+      });
+    }
+
     const montoNum = Number(monto);
     if (isNaN(montoNum) || !isFinite(montoNum) || montoNum <= 0) {
       return res.status(400).json({
         error: 'El monto del abono debe ser un número positivo mayor a cero.'
+      });
+    }
+
+    if (Math.floor(montoNum * 100) !== Math.round(montoNum * 100)) {
+      return res.status(400).json({
+        error: 'El monto del abono no puede exceder los 2 decimales.'
       });
     }
 
@@ -357,6 +369,7 @@ const registrarPagoReserva = async (req, res) => {
     }
 
     const idUsuarioRegistra = req.usuario ? req.usuario.id : null;
+    const refOperacionLimpia = (referenciaOperacion || req.headers['x-idempotency-key'] || '').toString().trim();
 
     // Transacción ACID atómica
     const resultado = await prisma.$transaction(async (tx) => {
@@ -376,6 +389,23 @@ const registrarPagoReserva = async (req, res) => {
         throw err;
       }
 
+      // HU09-P02: Prevención de pagos duplicados por idempotencia de operación
+      if (refOperacionLimpia) {
+        const pagoDuplicado = await tx.pagoReserva.findFirst({
+          where: {
+            idReserva,
+            referenciaOperacion: refOperacionLimpia
+          }
+        });
+        if (pagoDuplicado) {
+          const err = new Error(
+            `Operación duplicada: ya existe un abono registrado con la referencia "${refOperacionLimpia}" para esta reserva.`
+          );
+          err.statusCode = 409;
+          throw err;
+        }
+      }
+
       const saldoActual = parseFloat(reserva.saldoPendiente);
 
       // HU-09 Escenario 2: Impedir un pago mayor al saldo
@@ -391,6 +421,7 @@ const registrarPagoReserva = async (req, res) => {
       const nuevoTotalAdelanto = Math.round((parseFloat(reserva.montoAdelanto) + montoNum) * 100) / 100;
 
       // HU-09 Escenario 3: Si completa el saldo pendiente a 0, estadoPago -> COMPLETADO
+      // HU09-P04: Decisión funcional - El primer abono confirma la reserva PENDIENTE -> CONFIRMADA
       const nuevoEstadoPago = nuevoSaldo === 0 ? 'COMPLETADO' : 'PARCIAL';
       const nuevoEstadoReserva = reserva.estadoReserva === 'PENDIENTE' ? 'CONFIRMADA' : reserva.estadoReserva;
 
@@ -400,21 +431,37 @@ const registrarPagoReserva = async (req, res) => {
           idReserva,
           monto: montoNum,
           medioPago: medioNormalizado,
-          referenciaOperacion: referenciaOperacion ? referenciaOperacion.trim() : null,
+          referenciaOperacion: refOperacionLimpia || null,
           idUsuarioRegistra,
           observaciones: observaciones ? observaciones.trim() : null
         }
       });
 
-      // 2. Actualizar el saldo de la reserva
-      const reservaActualizada = await tx.reserva.update({
-        where: { id: idReserva },
+      // 2. HU09-P01: Actualización condicional atómica del saldo (Optimistic Lock)
+      // Si otra transacción modificó el saldo en simultáneo, el UPDATE afectará 0 filas y abortará
+      const actualizacion = await tx.reserva.updateMany({
+        where: {
+          id: idReserva,
+          saldoPendiente: reserva.saldoPendiente
+        },
         data: {
           montoAdelanto: nuevoTotalAdelanto,
           saldoPendiente: nuevoSaldo,
           estadoPago: nuevoEstadoPago,
           estadoReserva: nuevoEstadoReserva
-        },
+        }
+      });
+
+      if (actualizacion.count === 0) {
+        const err = new Error(
+          'Conflicto de concurrencia: el saldo de la reserva fue modificado simultáneamente por otra operación. Por favor reintente con el saldo vigente.'
+        );
+        err.statusCode = 409;
+        throw err;
+      }
+
+      const reservaActualizada = await tx.reserva.findUnique({
+        where: { id: idReserva },
         include: {
           producto: {
             select: { id: true, nombre: true, codigo: true, precio: true }
@@ -457,6 +504,15 @@ const obtenerHistorialPagos = async (req, res) => {
 
     if (isNaN(idReserva) || idReserva <= 0) {
       return res.status(400).json({ error: 'ID de reserva inválido.' });
+    }
+
+    // HU09-P06: Verificar existencia previa de la reserva
+    const reservaExiste = await prisma.reserva.findUnique({
+      where: { id: idReserva }
+    });
+
+    if (!reservaExiste) {
+      return res.status(404).json({ error: 'La reserva solicitada no existe.' });
     }
 
     const pagos = await prisma.pagoReserva.findMany({

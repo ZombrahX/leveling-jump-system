@@ -635,10 +635,39 @@ const actualizarEstadoEntrega = async (req, res) => {
       if (estadoEntrega === 'ENTREGADO') {
         dataToUpdate.estadoReserva = 'ENTREGADA';
         if (reserva.idUnidad) {
-          await tx.inventarioUnidad.update({
-            where: { id: reserva.idUnidad },
+          // HU10-P02 & P07: Comprobar explícitamente el estado y vinculación vigente de la unidad física
+          const unidadActual = await tx.inventarioUnidad.findUnique({
+            where: { id: reserva.idUnidad }
+          });
+
+          if (!unidadActual) {
+            const err = new Error('La unidad física asignada a esta reserva ya no existe en el inventario.');
+            err.statusCode = 409;
+            throw err;
+          }
+
+          if (unidadActual.estadoStock !== 'RESERVADO') {
+            const err = new Error(
+              `Inconsistencia de inventario: La unidad física (Serie: ${unidadActual.codigoSerie}) se encuentra en estado "${unidadActual.estadoStock}" y no en RESERVADO. No se puede marcar como ENTREGADA una reserva cuya unidad física no está reservada.`
+            );
+            err.statusCode = 409;
+            throw err;
+          }
+
+          // Actualización atómica condicionada
+          const asignacion = await tx.inventarioUnidad.updateMany({
+            where: {
+              id: reserva.idUnidad,
+              estadoStock: 'RESERVADO'
+            },
             data: { estadoStock: 'VENDIDO' }
           });
+
+          if (asignacion.count === 0) {
+            const err = new Error('Conflicto de inventario: La unidad física asignada ya no se encuentra en estado RESERVADO.');
+            err.statusCode = 409;
+            throw err;
+          }
         }
       }
 

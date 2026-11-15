@@ -30,6 +30,12 @@ const registrarInteres = async (req, res) => {
       return res.status(400).json({ error: 'El teléfono/WhatsApp es obligatorio para poder notificarte.' });
     }
 
+    // HU08-P06: Normalización estricta de teléfono (remover prefijos, espacios y símbolos)
+    const telLimpio = telefonoCliente.replace(/\D/g, '').replace(/^51/, '');
+    if (telLimpio.length < 8) {
+      return res.status(400).json({ error: 'El número de teléfono o WhatsApp ingresado no es válido (mínimo 8 dígitos).' });
+    }
+
     // Verificar existencia del producto
     const producto = await prisma.producto.findUnique({
       where: { id: idProd }
@@ -39,17 +45,34 @@ const registrarInteres = async (req, res) => {
       return res.status(404).json({ error: 'El producto seleccionado no existe.' });
     }
 
-    // Prevención de duplicados (CA2)
+    // HU08-P01: Registro condicionado a no disponibilidad (solo si está agotado o sin stock)
+    const stockDisponible = await prisma.inventarioUnidad.count({
+      where: {
+        idProducto: idProd,
+        estadoStock: 'DISPONIBLE',
+        reservas: {
+          none: { estadoReserva: { in: ['PENDIENTE', 'CONFIRMADA'] } }
+        }
+      }
+    });
+
+    if (stockDisponible > 0) {
+      return res.status(400).json({
+        error: `El producto "${producto.nombre}" cuenta actualmente con ${stockDisponible} unidad(es) disponible(s) en stock. Puede proceder a reservarlo o comprarlo directamente en el catálogo.`
+      });
+    }
+
+    // Prevención de duplicados (CA2 / HU08-P06)
     const interesExistente = await prisma.interesProducto.findFirst({
       where: {
         idProducto: idProd,
-        telefonoCliente: telefonoCliente.trim()
+        telefonoCliente: telLimpio
       }
     });
 
     if (interesExistente) {
       return res.status(409).json({
-        error: `Ya registraste tu interés en "${producto.nombre}". Te notificaremos por WhatsApp apenas esté disponible.`
+        error: `Ya registraste tu interés en "${producto.nombre}". Te contactaremos apenas exista disponibilidad.`
       });
     }
 
@@ -57,7 +80,7 @@ const registrarInteres = async (req, res) => {
       data: {
         idProducto: idProd,
         nombreCliente: nombreCliente.trim(),
-        telefonoCliente: telefonoCliente.trim(),
+        telefonoCliente: telLimpio,
         emailCliente: emailCliente ? emailCliente.trim() : null,
         notas: notas ? notas.trim() : null
       },
@@ -88,18 +111,31 @@ const listarResumenIntereses = async (req, res) => {
       orderBy: { fechaRegistro: 'desc' },
       include: {
         producto: {
-          select: { id: true, nombre: true, marca: true, precio: true, stockActual: true }
+          select: { id: true, codigo: true, nombre: true, marca: true, precio: true }
         }
       }
     });
 
-    // Agrupar por producto para análisis de demanda
+    // Agrupar por producto para análisis de demanda e identificar productos con stock repuesto (HU08-P02)
     const agrupado = {};
     for (const item of intereses) {
       const pid = item.idProducto;
       if (!agrupado[pid]) {
+        // Consultar stock físico disponible actualmente
+        const stockActualDisp = await prisma.inventarioUnidad.count({
+          where: {
+            idProducto: pid,
+            estadoStock: 'DISPONIBLE',
+            reservas: {
+              none: { estadoReserva: { in: ['PENDIENTE', 'CONFIRMADA'] } }
+            }
+          }
+        });
+
         agrupado[pid] = {
           producto: item.producto,
+          stockDisponibleActual: stockActualDisp,
+          tieneStockParaAtender: stockActualDisp > 0,
           totalInteresados: 0,
           clientes: []
         };

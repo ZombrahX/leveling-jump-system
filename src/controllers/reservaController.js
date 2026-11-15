@@ -369,7 +369,15 @@ const registrarPagoReserva = async (req, res) => {
     }
 
     const idUsuarioRegistra = req.usuario ? req.usuario.id : null;
-    const refOperacionLimpia = (referenciaOperacion || req.headers['x-idempotency-key'] || '').toString().trim();
+    const refOperacionLimpia = (referenciaOperacion || '').toString().trim();
+
+    // HU09-P01 & P02: Clave de idempotencia única garantizada a nivel de base de datos
+    const claveIdempotencia = (
+      req.headers['x-idempotency-key'] ||
+      req.body.idempotencyKey ||
+      (refOperacionLimpia ? `RES-${idReserva}-REF-${refOperacionLimpia}` : null) ||
+      `PAY-${idReserva}-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`
+    ).toString().trim();
 
     // Transacción ACID atómica
     const resultado = await prisma.$transaction(async (tx) => {
@@ -425,13 +433,14 @@ const registrarPagoReserva = async (req, res) => {
       const nuevoEstadoPago = nuevoSaldo === 0 ? 'COMPLETADO' : 'PARCIAL';
       const nuevoEstadoReserva = reserva.estadoReserva === 'PENDIENTE' ? 'CONFIRMADA' : reserva.estadoReserva;
 
-      // 1. Guardar el pago en pagos_reserva
+      // 1. Guardar el pago en pagos_reserva con restricción UNIQUE de idempotencia en BD (HU09-P02)
       const nuevoPago = await tx.pagoReserva.create({
         data: {
           idReserva,
           monto: montoNum,
           medioPago: medioNormalizado,
           referenciaOperacion: refOperacionLimpia || null,
+          idempotencyKey: claveIdempotencia,
           idUsuarioRegistra,
           observaciones: observaciones ? observaciones.trim() : null
         }
@@ -487,6 +496,11 @@ const registrarPagoReserva = async (req, res) => {
     });
   } catch (error) {
     console.error('[ReservaController.registrarPagoReserva] Error:', error.message);
+    if (error.code === 'P2002') {
+      return res.status(409).json({
+        error: 'Operación duplicada: Se detectó una solicitud simultánea o reintento para este mismo pago (violación de clave de idempotencia).'
+      });
+    }
     const statusCode = error.statusCode || 500;
     return res.status(statusCode).json({
       error: sanitizarError(error, 'Error al registrar el pago de la reserva.')

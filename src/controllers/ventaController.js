@@ -165,30 +165,7 @@ const registrarVenta = async (req, res) => {
           throw err;
         }
 
-        // P02: Validar precio de venta vs costo de adquisición (Regla HU-13)
-        let precioFinal = item.precioManual !== null ? item.precioManual : parseFloat(producto.precio);
-
-        // Consultar el último costo de adquisición registrado para este producto
-        const unidadConCosto = await tx.inventarioUnidad.findFirst({
-          where: {
-            idProducto: item.idProducto,
-            costoUnitario: { not: null }
-          },
-          orderBy: { id: 'desc' }
-        });
-
-        if (unidadConCosto && unidadConCosto.costoUnitario) {
-          const costoRef = parseFloat(unidadConCosto.costoUnitario);
-          if (precioFinal < costoRef) {
-            const err = new Error(
-              `El precio de venta (S/ ${precioFinal.toFixed(2)}) para "${producto.nombre}" no puede ser inferior a su costo de adquisición (S/ ${costoRef.toFixed(2)}) conforme a la política de margen (HU-13).`
-            );
-            err.statusCode = 400;
-            throw err;
-          }
-        }
-
-        // HU-05 Escenario 2: Buscar unidades físicas estrictamente DISPONIBLES y sin reservas activas
+        // HU-05 Escenario 2 & P01: Buscar unidades físicas estrictamente DISPONIBLES y sin reservas activas
         const unidadesDisponibles = await tx.inventarioUnidad.findMany({
           where: {
             idProducto: item.idProducto,
@@ -208,6 +185,26 @@ const registrarVenta = async (req, res) => {
           );
           err.statusCode = 409; // HTTP 409 Conflict
           throw err;
+        }
+
+        // P02: Validar precio de venta vs costo de adquisición específico de las unidades asignadas (HU-13 / P02)
+        let precioFinal = item.precioManual !== null ? item.precioManual : parseFloat(producto.precio);
+
+        for (const u of unidadesDisponibles) {
+          let costoRef = null;
+          if (u.costoUnitario) {
+            costoRef = parseFloat(u.costoUnitario);
+          } else if (producto.costoUnitario) {
+            costoRef = parseFloat(producto.costoUnitario);
+          }
+
+          if (costoRef !== null && precioFinal < costoRef) {
+            const err = new Error(
+              `El precio de venta (S/ ${precioFinal.toFixed(2)}) para "${producto.nombre}" (Serie: ${u.codigoSerie}) no puede ser inferior a su costo de adquisición (S/ ${costoRef.toFixed(2)}) conforme a la política de margen (HU-13).`
+            );
+            err.statusCode = 400;
+            throw err;
+          }
         }
 
         const subtotal = Math.round(precioFinal * item.cantidad * 100) / 100;

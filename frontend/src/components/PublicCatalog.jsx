@@ -26,7 +26,8 @@ export default function PublicCatalog({
   onAbrirBolsa,
   onAddToCart,
   cartCount = 0,
-  onAbrirCarrito
+  onAbrirCarrito,
+  onAvisarStock
 }) {
   const [busqueda, setBusqueda] = useState('');
   const [categoria, setCategoria] = useState('');
@@ -147,22 +148,39 @@ export default function PublicCatalog({
 
                 {/* P08: Deshabilitar botones de reserva si el producto está agotado */}
                 <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
-                  <button
-                    type="button"
-                    className={isAgotado ? 'secondary' : 'primary'}
-                    disabled={isAgotado}
-                    style={{
-                      flex: 1,
-                      padding: '8px 10px',
-                      fontSize: '12.5px',
-                      opacity: isAgotado ? 0.55 : 1,
-                      cursor: isAgotado ? 'not-allowed' : 'pointer'
-                    }}
-                    onClick={() => !isAgotado && onReservarProducto && onReservarProducto(p)}
-                    title={isAgotado ? 'Producto agotado. No hay unidades disponibles para reservar.' : 'Apartar este kit'}
-                  >
-                    {isAgotado ? '🚫 Agotado' : '🔖 Reservar'}
-                  </button>
+                  {isAgotado ? (
+                    <button
+                      type="button"
+                      className="primary"
+                      style={{
+                        flex: 1,
+                        padding: '8px 10px',
+                        fontSize: '12.5px',
+                        background: '#D97706',
+                        color: '#FFFFFF',
+                        cursor: 'pointer'
+                      }}
+                      onClick={() => onAvisarStock && onAvisarStock(p)}
+                      title="Anotarme en la lista de espera para cuando llegue stock (HU-08)"
+                    >
+                      🔔 Avisarme (Waitlist)
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="primary"
+                      style={{
+                        flex: 1,
+                        padding: '8px 10px',
+                        fontSize: '12.5px',
+                        cursor: 'pointer'
+                      }}
+                      onClick={() => onReservarProducto && onReservarProducto(p)}
+                      title="Apartar este kit"
+                    >
+                      🔖 Reservar
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="secondary"

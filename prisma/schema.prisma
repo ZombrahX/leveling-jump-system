@@ -96,6 +96,7 @@ model Producto {
   reservas           Reserva[]
   ventasDetalle      VentaDetalle[]
   cotizacionesDetalle CotizacionDetalle[]
+  intereses          InteresProducto[]
 
   @@unique([nombre, marca, escala, serie], name: "unique_producto_version") // RN-HU03-05: Prevención de duplicados
   @@index([nombre], name: "idx_producto_nombre")                             // RN-HU03-06: Búsqueda rápida
@@ -298,6 +299,7 @@ model PagoReserva {
   monto               Decimal          @map("monto_pago") @db.Decimal(10, 2)
   medioPago           MedioPagoVenta   @default(YAPE) @map("medio_pago")
   referenciaOperacion String?          @map("referencia_operacion") @db.VarChar(100)
+  idempotencyKey      String?          @unique @map("idempotency_key") @db.VarChar(100) // HU09-P02: Clave de idempotencia única en BD
   idUsuarioRegistra   Int?             @map("id_usuario_registra")
   observaciones       String?          @map("observaciones") @db.Text
   fechaPago           DateTime         @default(now()) @map("fecha_pago")
@@ -362,4 +364,32 @@ model CotizacionDetalle {
 
   @@index([idCotizacion], name: "idx_cotizacion_detalle_cotizacion")
   @@map("cotizaciones_detalle")
+}
+
+// ----------------------------------------------------
+// HU-08: REGISTRO DE INTERÉS EN PRODUCTOS FUTUROS / AGOTADOS
+// ----------------------------------------------------
+enum EstadoInteres {
+  PENDIENTE
+  NOTIFICADO
+  CONVERTIDO_RESERVA
+  CANCELADO
+}
+
+model InteresProducto {
+  id              Int           @id @default(autoincrement()) @map("id_interes")
+  idProducto      Int           @map("id_producto")
+  nombreCliente   String        @map("nombre_cliente") @db.VarChar(150)
+  telefonoCliente String        @map("telefono_cliente") @db.VarChar(25)
+  emailCliente    String?       @map("email_cliente") @db.VarChar(150)
+  estado          EstadoInteres @default(PENDIENTE) @map("estado_interes")
+  notas           String?       @map("notas") @db.Text
+  fechaRegistro   DateTime      @default(now()) @map("fecha_registro")
+
+  producto        Producto      @relation(fields: [idProducto], references: [id], onDelete: Cascade)
+
+  @@unique([idProducto, telefonoCliente], name: "unique_interes_cliente_producto")
+  @@index([idProducto], name: "idx_interes_producto")
+  @@index([estado], name: "idx_interes_estado")
+  @@map("intereses_producto")
 }

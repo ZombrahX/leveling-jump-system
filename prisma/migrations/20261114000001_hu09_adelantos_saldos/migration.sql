@@ -16,6 +16,7 @@ CREATE TABLE "pagos_reserva" (
     "monto_pago" DECIMAL(10,2) NOT NULL,
     "medio_pago" "MedioPagoVenta" NOT NULL DEFAULT 'YAPE',
     "referencia_operacion" VARCHAR(100),
+    "idempotency_key" VARCHAR(100) UNIQUE,
     "id_usuario_registra" INTEGER,
     "observaciones" TEXT,
     "fecha_pago" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,

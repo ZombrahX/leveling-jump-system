@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const {
   crearReserva,
+  crearReservasEnMasa,
   obtenerReservas,
   obtenerMisReservas,
   actualizarEstadoReserva,
@@ -14,6 +15,9 @@ const { verificarToken, requerirRol } = require('../middlewares/authMiddleware')
 
 // Endpoint público para que clientes reserven una unidad desde el catálogo (HU-06)
 router.post('/reservas', crearReserva);
+
+// HU-02 & HU-06: Endpoint atómico para reservas múltiples desde carrito (evita confirmaciones parciales)
+router.post('/reservas/en-masa', crearReservasEnMasa);
 
 // HU-10: Endpoint público para rastrear el pedido por código correlativo (Escenario 1 y 2)
 router.get('/reservas/seguimiento/:codigo', consultarSeguimientoPublico);

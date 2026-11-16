@@ -13,6 +13,7 @@ import MultiReservationModal from './components/MultiReservationModal';
 import VentasPOS from './components/VentasPOS';
 import OrderTrackingModal from './components/OrderTrackingModal';
 import CartAndQuotationModal from './components/CartAndQuotationModal';
+import WaitlistModal from './components/WaitlistModal';
 import { obtenerProductos, crearProducto, actualizarProducto } from './services/productService';
 import { registrarRecepcion } from './services/recepcionService';
 import { authService } from './services/authService';
@@ -58,6 +59,7 @@ export default function App() {
   const [showMultiModal, setShowMultiModal] = useState(false);
   const [showTrackingModal, setShowTrackingModal] = useState(false);
   const [showCartModal, setShowCartModal] = useState(false);
+  const [productoWaitlist, setProductoWaitlist] = useState(null);
 
   // Carrito Comercial (HU-02 & HU-07) con persistencia en localStorage
   const [carrito, setCarrito] = useState(() => {
@@ -539,6 +541,7 @@ export default function App() {
             onAddToCart={addToCart}
             cartCount={carrito.reduce((a, b) => a + b.cantidad, 0)}
             onAbrirCarrito={() => setShowCartModal(true)}
+            onAvisarStock={prod => setProductoWaitlist(prod)}
           />
         </div>
       )}
@@ -679,14 +682,30 @@ export default function App() {
         setCart={setCarrito}
         onClearCart={clearCart}
         onProcederReserva={(items) => {
-          const prods = items.map(it => {
-            const pOrig = productos.find(p => p.id === it.id);
-            return pOrig || it;
+          // HU-02: Conservar las cantidades de cada producto al pasar del carrito a la reserva múltiple
+          const prods = [];
+          items.forEach(it => {
+            const pOrig = productos.find(p => p.id === it.id) || it;
+            const cant = Number(it.cantidad) || 1;
+            for (let i = 0; i < cant; i++) {
+              prods.push({
+                ...pOrig,
+                precio: Number(pOrig.precio || it.precio),
+                itemUid: `${pOrig.id}_${i}_${Date.now()}`
+              });
+            }
           });
           setBolsaReservas(prods);
           setShowCartModal(false);
           setShowMultiModal(true);
         }}
+      />
+
+      <WaitlistModal
+        isOpen={!!productoWaitlist}
+        producto={productoWaitlist}
+        usuarioActual={usuario}
+        onClose={() => setProductoWaitlist(null)}
       />
     </main>
   );

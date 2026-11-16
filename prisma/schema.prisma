@@ -46,6 +46,7 @@ model Usuario {
   // Relaciones
   reservas           Reserva[]
   ventas             Venta[]
+  pagosRegistrados   PagoReserva[]
 
   @@map("usuarios")
 }
@@ -94,6 +95,8 @@ model Producto {
   unidadesInventario InventarioUnidad[]
   reservas           Reserva[]
   ventasDetalle      VentaDetalle[]
+  cotizacionesDetalle CotizacionDetalle[]
+  intereses          InteresProducto[]
 
   @@unique([nombre, marca, escala, serie], name: "unique_producto_version") // RN-HU03-05: Prevención de duplicados
   @@index([nombre], name: "idx_producto_nombre")                             // RN-HU03-06: Búsqueda rápida
@@ -183,19 +186,28 @@ model Reserva {
   montoAdelanto      Decimal          @default(0) @map("monto_adelanto") @db.Decimal(10, 2)
   saldoPendiente     Decimal          @map("saldo_pendiente") @db.Decimal(10, 2) // total - adelanto
 
-  estadoReserva      EstadoReserva    @default(PENDIENTE) @map("estado_reserva")
-  notas              String?          @map("notas") @db.Text // Ej: "Retiro en feria sábado / TikTok live"
-  fechaReserva       DateTime         @default(now()) @map("fecha_reserva")
-  fechaLimite        DateTime?        @map("fecha_limite_retiro")
+  estadoReserva      EstadoReserva     @default(PENDIENTE) @map("estado_reserva")
+  estadoPago         EstadoPagoReserva @default(PENDIENTE) @map("estado_pago") // HU-09: Control de abonos y saldos
+  modalidadEntrega   ModalidadEntrega  @default(RETIRO_FERIA) @map("modalidad_entrega") // HU-10: Modalidad de despacho
+  estadoEntrega      EstadoEntrega     @default(PENDIENTE_PREPARACION) @map("estado_entrega") // HU-10: Avance del pedido
+  fechaEstimadaEntrega DateTime?       @map("fecha_estimada_entrega")
+  direccionEntrega   String?           @map("direccion_entrega") @db.VarChar(255)
+  guiaCourier        String?           @map("guia_courier") @db.VarChar(100)
+  notas              String?           @map("notas") @db.Text // Ej: "Retiro en feria sábado / TikTok live"
+  fechaReserva       DateTime          @default(now()) @map("fecha_reserva")
+  fechaLimite        DateTime?         @map("fecha_limite_retiro")
 
   // Relaciones
-  producto           Producto         @relation(fields: [idProducto], references: [id], onDelete: Restrict)
+  producto           Producto          @relation(fields: [idProducto], references: [id], onDelete: Restrict)
   unidadInventario   InventarioUnidad? @relation(fields: [idUnidad], references: [id], onDelete: SetNull)
-  usuario            Usuario?         @relation(fields: [idUsuario], references: [id], onDelete: SetNull)
+  usuario            Usuario?          @relation(fields: [idUsuario], references: [id], onDelete: SetNull)
+  pagos              PagoReserva[]
 
   @@index([idProducto], name: "idx_reserva_producto")
   @@index([idUnidad], name: "idx_reserva_unidad")
   @@index([estadoReserva], name: "idx_reserva_estado")
+  @@index([estadoPago], name: "idx_reserva_estado_pago")
+  @@index([estadoEntrega], name: "idx_reserva_estado_entrega")
   @@map("reservas")
 }
 
@@ -270,4 +282,114 @@ model VentaDetalle {
   @@index([idVenta], name: "idx_detalle_venta")
   @@index([idProducto], name: "idx_detalle_producto")
   @@map("ventas_detalle")
+}
+
+// ----------------------------------------------------
+// HU-09: GESTIÓN DE ADELANTOS Y SALDOS DE RESERVAS
+// ----------------------------------------------------
+enum EstadoPagoReserva {
+  PENDIENTE       // Sin pagos o adelanto S/ 0
+  PARCIAL         // Con adelanto o abonos pero con saldo pendiente > 0
+  COMPLETADO      // Saldo pendiente llegó exactamente a S/ 0
+}
+
+model PagoReserva {
+  id                  Int              @id @default(autoincrement()) @map("id_pago_reserva")
+  idReserva           Int              @map("id_reserva")
+  monto               Decimal          @map("monto_pago") @db.Decimal(10, 2)
+  medioPago           MedioPagoVenta   @default(YAPE) @map("medio_pago")
+  referenciaOperacion String?          @map("referencia_operacion") @db.VarChar(100)
+  idempotencyKey      String?          @unique @map("idempotency_key") @db.VarChar(100) // HU09-P02: Clave de idempotencia única en BD
+  idUsuarioRegistra   Int?             @map("id_usuario_registra")
+  observaciones       String?          @map("observaciones") @db.Text
+  fechaPago           DateTime         @default(now()) @map("fecha_pago")
+
+  // Relaciones
+  reserva             Reserva          @relation(fields: [idReserva], references: [id], onDelete: Cascade)
+  usuarioRegistra     Usuario?         @relation(fields: [idUsuarioRegistra], references: [id], onDelete: SetNull)
+
+  @@index([idReserva], name: "idx_pago_reserva")
+  @@index([fechaPago], name: "idx_pago_fecha")
+  @@map("pagos_reserva")
+}
+
+// ----------------------------------------------------
+// HU-10: SEGUIMIENTO DE PEDIDOS Y MODALIDAD DE ENTREGA
+// ----------------------------------------------------
+enum ModalidadEntrega {
+  RETIRO_FERIA      // Retiro en feria de los sábados (Arenales)
+  RETIRO_TIENDA     // Retiro en almacén / punto central
+  ENVIO_LIMA        // Envío motorizado / Olva Courier en Lima
+  ENVIO_PROVINCIA   // Agencia de transporte (Shalom / Marvisur)
+}
+
+enum EstadoEntrega {
+  PENDIENTE_PREPARACION // En preparación de paquete
+  LISTO_PARA_ENTREGA    // Listo para recojo en feria o entrega
+  EN_TRANSITO           // En courier o camino a la feria
+  ENTREGADO             // Entregado físicamente al cliente
+}
+
+// ----------------------------------------------------
+// HU-07: SOLICITAR COTIZACIÓN FORMAL
+// ----------------------------------------------------
+model Cotizacion {
+  id               Int                 @id @default(autoincrement()) @map("id_cotizacion")
+  codigoCotizacion String              @unique @map("codigo_cotizacion") @db.VarChar(30) // COT-2026-0001
+  nombreCliente    String              @map("nombre_cliente") @db.VarChar(150)
+  emailCliente     String?             @map("email_cliente") @db.VarChar(150)
+  telefonoCliente  String              @map("telefono_cliente") @db.VarChar(25)
+  total            Decimal             @map("total_soles") @db.Decimal(10, 2)
+  fechaEmision     DateTime            @default(now()) @map("fecha_emision")
+  fechaVencimiento DateTime            @map("fecha_vencimiento") // 7 días de vigencia comercial
+  observaciones    String?             @map("observaciones") @db.Text
+  items            CotizacionDetalle[]
+
+  @@index([codigoCotizacion], name: "idx_cotizacion_codigo")
+  @@index([fechaEmision], name: "idx_cotizacion_fecha")
+  @@map("cotizaciones")
+}
+
+model CotizacionDetalle {
+  id              Int        @id @default(autoincrement()) @map("id_cotizacion_detalle")
+  idCotizacion    Int        @map("id_cotizacion")
+  idProducto      Int        @map("id_producto")
+  nombreProducto  String     @map("nombre_producto") @db.VarChar(150)
+  cantidad        Int        @map("cantidad")
+  precioUnitario  Decimal    @map("precio_unitario") @db.Decimal(10, 2)
+  subtotal        Decimal    @map("subtotal") @db.Decimal(10, 2)
+
+  cotizacion      Cotizacion @relation(fields: [idCotizacion], references: [id], onDelete: Cascade)
+  producto        Producto   @relation(fields: [idProducto], references: [id], onDelete: Restrict)
+
+  @@index([idCotizacion], name: "idx_cotizacion_detalle_cotizacion")
+  @@map("cotizaciones_detalle")
+}
+
+// ----------------------------------------------------
+// HU-08: REGISTRO DE INTERÉS EN PRODUCTOS FUTUROS / AGOTADOS
+// ----------------------------------------------------
+enum EstadoInteres {
+  PENDIENTE
+  NOTIFICADO
+  CONVERTIDO_RESERVA
+  CANCELADO
+}
+
+model InteresProducto {
+  id              Int           @id @default(autoincrement()) @map("id_interes")
+  idProducto      Int           @map("id_producto")
+  nombreCliente   String        @map("nombre_cliente") @db.VarChar(150)
+  telefonoCliente String        @map("telefono_cliente") @db.VarChar(25)
+  emailCliente    String?       @map("email_cliente") @db.VarChar(150)
+  estado          EstadoInteres @default(PENDIENTE) @map("estado_interes")
+  notas           String?       @map("notas") @db.Text
+  fechaRegistro   DateTime      @default(now()) @map("fecha_registro")
+
+  producto        Producto      @relation(fields: [idProducto], references: [id], onDelete: Cascade)
+
+  @@unique([idProducto, telefonoCliente], name: "unique_interes_cliente_producto")
+  @@index([idProducto], name: "idx_interes_producto")
+  @@index([estado], name: "idx_interes_estado")
+  @@map("intereses_producto")
 }

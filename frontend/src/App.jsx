@@ -12,6 +12,8 @@ import ReservationModal from './components/ReservationModal';
 import MultiReservationModal from './components/MultiReservationModal';
 import VentasPOS from './components/VentasPOS';
 import OrderTrackingModal from './components/OrderTrackingModal';
+import CartAndQuotationModal from './components/CartAndQuotationModal';
+import WaitlistModal from './components/WaitlistModal';
 import { obtenerProductos, crearProducto, actualizarProducto } from './services/productService';
 import { registrarRecepcion } from './services/recepcionService';
 import { authService } from './services/authService';
@@ -56,6 +58,37 @@ export default function App() {
   const [productoReserva, setProductoReserva] = useState(null);
   const [showMultiModal, setShowMultiModal] = useState(false);
   const [showTrackingModal, setShowTrackingModal] = useState(false);
+  const [showCartModal, setShowCartModal] = useState(false);
+  const [productoWaitlist, setProductoWaitlist] = useState(null);
+
+  // Carrito Comercial (HU-02 & HU-07) con persistencia en localStorage
+  const [carrito, setCarrito] = useState(() => {
+    try {
+      const saved = localStorage.getItem('lj_carrito_comercial');
+      if (saved) return JSON.parse(saved);
+    } catch (_) {}
+    return [];
+  });
+
+  const addToCart = (prod) => {
+    setCarrito(prev => {
+      const exist = prev.find(i => i.id === prod.id);
+      let updated;
+      if (exist) {
+        updated = prev.map(i => i.id === prod.id ? { ...i, cantidad: i.cantidad + 1 } : i);
+      } else {
+        updated = [...prev, { id: prod.id, nombre: prod.nombre, precio: prod.precio, cantidad: 1 }];
+      }
+      try { localStorage.setItem('lj_carrito_comercial', JSON.stringify(updated)); } catch (_) {}
+      return updated;
+    });
+    setMsg(`"${prod.nombre}" añadido al carrito.`);
+  };
+
+  const clearCart = () => {
+    setCarrito([]);
+    try { localStorage.removeItem('lj_carrito_comercial'); } catch (_) {}
+  };
 
   // Bolsa de Reserva (Reservas en Masa) con persistencia en localStorage
   const [bolsaReservas, setBolsaReservas] = useState(() => {
@@ -320,6 +353,13 @@ export default function App() {
             >
               <span>📍</span> Rastrear Pedido (HU-10)
             </button>
+            <button
+              className="nav-bar-btn"
+              onClick={() => setShowCartModal(true)}
+              title="HU-02 / HU-07: Carrito de compras y solicitud de cotizaciones formales"
+            >
+              <span>🛒</span> Carrito / Cotizar {carrito.length > 0 && `(${carrito.reduce((a, b) => a + b.cantidad, 0)})`}
+            </button>
             {usuario && (
               <>
                 <button
@@ -498,6 +538,10 @@ export default function App() {
             bolsa={bolsaReservas}
             onToggleBolsa={toggleBolsa}
             onAbrirBolsa={() => setShowMultiModal(true)}
+            onAddToCart={addToCart}
+            cartCount={carrito.reduce((a, b) => a + b.cantidad, 0)}
+            onAbrirCarrito={() => setShowCartModal(true)}
+            onAvisarStock={prod => setProductoWaitlist(prod)}
           />
         </div>
       )}
@@ -629,6 +673,39 @@ export default function App() {
       <OrderTrackingModal
         isOpen={showTrackingModal}
         onClose={() => setShowTrackingModal(false)}
+      />
+
+      <CartAndQuotationModal
+        isOpen={showCartModal}
+        onClose={() => setShowCartModal(false)}
+        cart={carrito}
+        setCart={setCarrito}
+        onClearCart={clearCart}
+        onProcederReserva={(items) => {
+          // HU-02: Conservar las cantidades de cada producto al pasar del carrito a la reserva múltiple
+          const prods = [];
+          items.forEach(it => {
+            const pOrig = productos.find(p => p.id === it.id) || it;
+            const cant = Number(it.cantidad) || 1;
+            for (let i = 0; i < cant; i++) {
+              prods.push({
+                ...pOrig,
+                precio: Number(pOrig.precio || it.precio),
+                itemUid: `${pOrig.id}_${i}_${Date.now()}`
+              });
+            }
+          });
+          setBolsaReservas(prods);
+          setShowCartModal(false);
+          setShowMultiModal(true);
+        }}
+      />
+
+      <WaitlistModal
+        isOpen={!!productoWaitlist}
+        producto={productoWaitlist}
+        usuarioActual={usuario}
+        onClose={() => setProductoWaitlist(null)}
       />
     </main>
   );

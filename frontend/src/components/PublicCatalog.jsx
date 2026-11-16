@@ -23,7 +23,11 @@ export default function PublicCatalog({
   onReservarProducto,
   bolsa = [],
   onToggleBolsa,
-  onAbrirBolsa
+  onAbrirBolsa,
+  onAddToCart,
+  cartCount = 0,
+  onAbrirCarrito,
+  onAvisarStock
 }) {
   const [busqueda, setBusqueda] = useState('');
   const [categoria, setCategoria] = useState('');
@@ -43,6 +47,23 @@ export default function PublicCatalog({
           <p className="muted">Explora el catálogo disponible de Leveling Jump con disponibilidad de stock en tiempo real.</p>
         </div>
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          {cartCount > 0 && (
+            <button
+              type="button"
+              className="primary"
+              onClick={onAbrirCarrito}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                background: '#4F46E5',
+                color: '#FFFFFF',
+                boxShadow: '0 0 12px rgba(79, 70, 229, 0.4)'
+              }}
+            >
+              <span>🛒</span> Carrito / Cotizar ({cartCount})
+            </button>
+          )}
           {bolsa.length > 0 && (
             <button
               type="button"
@@ -57,7 +78,7 @@ export default function PublicCatalog({
                 boxShadow: '0 0 12px var(--color-cyan-glow)'
               }}
             >
-              <span>🛒</span> Ver Bolsa ({bolsa.length})
+              <span>🔖</span> Ver Bolsa ({bolsa.length})
             </button>
           )}
           <button className="secondary" type="button" onClick={onRecargar}>Actualizar lista</button>
@@ -127,22 +148,39 @@ export default function PublicCatalog({
 
                 {/* P08: Deshabilitar botones de reserva si el producto está agotado */}
                 <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
-                  <button
-                    type="button"
-                    className={isAgotado ? 'secondary' : 'primary'}
-                    disabled={isAgotado}
-                    style={{
-                      flex: 1,
-                      padding: '8px 10px',
-                      fontSize: '12.5px',
-                      opacity: isAgotado ? 0.55 : 1,
-                      cursor: isAgotado ? 'not-allowed' : 'pointer'
-                    }}
-                    onClick={() => !isAgotado && onReservarProducto && onReservarProducto(p)}
-                    title={isAgotado ? 'Producto agotado. No hay unidades disponibles para reservar.' : 'Apartar este kit'}
-                  >
-                    {isAgotado ? '🚫 Agotado' : '🔖 Reservar'}
-                  </button>
+                  {isAgotado ? (
+                    <button
+                      type="button"
+                      className="primary"
+                      style={{
+                        flex: 1,
+                        padding: '8px 10px',
+                        fontSize: '12.5px',
+                        background: '#D97706',
+                        color: '#FFFFFF',
+                        cursor: 'pointer'
+                      }}
+                      onClick={() => onAvisarStock && onAvisarStock(p)}
+                      title="Anotarme en la lista de espera para cuando llegue stock (HU-08)"
+                    >
+                      🔔 Avisarme (Waitlist)
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="primary"
+                      style={{
+                        flex: 1,
+                        padding: '8px 10px',
+                        fontSize: '12.5px',
+                        cursor: 'pointer'
+                      }}
+                      onClick={() => onReservarProducto && onReservarProducto(p)}
+                      title="Apartar este kit"
+                    >
+                      🔖 Reservar
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="secondary"
@@ -162,6 +200,20 @@ export default function PublicCatalog({
                     title={isAgotado ? 'Producto agotado. No se puede añadir a la bolsa.' : (estaEnBolsa ? 'Quitar de la bolsa de reserva' : 'Añadir a la bolsa de reserva múltiple')}
                   >
                     {estaEnBolsa ? '✓ En Bolsa' : '➕ Bolsa'}
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary"
+                    style={{
+                      padding: '8px 12px',
+                      fontSize: '12.5px',
+                      whiteSpace: 'nowrap',
+                      cursor: 'pointer'
+                    }}
+                    onClick={() => onAddToCart && onAddToCart(p)}
+                    title="Añadir al carrito comercial para cotización o compra"
+                  >
+                    🛒
                   </button>
                 </div>
               </div>

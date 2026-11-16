@@ -681,6 +681,24 @@ export default function App() {
         cart={carrito}
         setCart={setCarrito}
         onClearCart={clearCart}
+        onProcederReserva={(items) => {
+          // HU-02: Conservar las cantidades de cada producto al pasar del carrito a la reserva múltiple
+          const prods = [];
+          items.forEach(it => {
+            const pOrig = productos.find(p => p.id === it.id) || it;
+            const cant = Number(it.cantidad) || 1;
+            for (let i = 0; i < cant; i++) {
+              prods.push({
+                ...pOrig,
+                precio: Number(pOrig.precio || it.precio),
+                itemUid: `${pOrig.id}_${i}_${Date.now()}`
+              });
+            }
+          });
+          setBolsaReservas(prods);
+          setShowCartModal(false);
+          setShowMultiModal(true);
+        }}
       />
 
       <WaitlistModal

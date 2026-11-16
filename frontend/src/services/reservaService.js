@@ -21,23 +21,24 @@ export const reservaService = {
     return handleResponse(res);
   },
 
-  // Registrar reservas en masa (Bolsa de Reserva / Carrito Multi-kit)
+  // Registrar reservas en masa atómicamente (Bolsa de Reserva / Carrito Multi-kit sin confirmaciones parciales)
   async crearReservasEnMasa(items, clienteData) {
-    const reservasCreadas = [];
-    for (const item of items) {
-      const res = await this.crearReserva({
-        idProducto: item.id,
+    const res = await fetch(`${API_URL}/en-masa`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        items: items.map(it => ({
+          idProducto: it.id,
+          adelantoAsignado: Number(it.adelantoAsignado || 0)
+        })),
         nombreCliente: clienteData.nombreCliente,
         telefonoCliente: clienteData.telefonoCliente,
         emailCliente: clienteData.emailCliente || null,
-        montoTotal: Number(item.precio),
-        montoAdelanto: Number(item.adelantoAsignado),
-        notas: clienteData.notas || '',
-        idUsuario: clienteData.idUsuario || null
-      });
-      reservasCreadas.push(res.reserva);
-    }
-    return reservasCreadas;
+        notas: clienteData.notas || ''
+      })
+    });
+    const data = await handleResponse(res);
+    return data.reservas;
   },
 
   // Obtener reservas con filtros (Staff - requiere token de ADMIN o SUPERADMIN)

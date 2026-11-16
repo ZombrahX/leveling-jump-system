@@ -1,0 +1,44 @@
+const API_URL = import.meta.env.VITE_API_URL 
+  ? `${import.meta.env.VITE_API_URL}/cotizaciones`
+  : 'http://localhost:4000/api/cotizaciones';
+
+const handleResponse = async (res) => {
+  const data = await res.json().catch(() => null);
+  if (!res.ok) {
+    throw new Error(data?.error || data?.mensaje || 'Error en la solicitud al servidor.');
+  }
+  return data;
+};
+
+export const cotizacionService = {
+  // HU-07: Generar y registrar cotización formal
+  async crearCotizacion(payload) {
+    const res = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    return handleResponse(res);
+  },
+
+  // HU-07: Consultar cotización por código correlativo
+  async obtenerPorCodigo(codigo) {
+    const res = await fetch(`${API_URL}/${encodeURIComponent(codigo)}`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    return handleResponse(res);
+  },
+
+  // HU-07: Listar cotizaciones para staff
+  async listar(token) {
+    const res = await fetch(API_URL, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      }
+    });
+    return handleResponse(res);
+  }
+};

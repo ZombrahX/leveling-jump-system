@@ -12,6 +12,7 @@ import ReservationModal from './components/ReservationModal';
 import VentasPOS from './components/VentasPOS';
 import OrderTrackingModal from './components/OrderTrackingModal';
 import CartAndQuotationModal from './components/CartAndQuotationModal';
+import CotizacionesList from './components/CotizacionesList';
 import WaitlistModal from './components/WaitlistModal';
 import { obtenerProductos, crearProducto, actualizarProducto } from './services/productService';
 import { registrarRecepcion } from './services/recepcionService';
@@ -419,7 +420,7 @@ export default function App() {
             <div className="nav-dropdown-wrapper">
               <button
                 type="button"
-                className={`nav-bar-btn has-dropdown ${vista === 'reservas' || vista === 'mis-reservas' || vista === 'ventas-pos' ? 'active' : ''}`}
+                className={`nav-bar-btn has-dropdown ${vista === 'reservas' || vista === 'mis-reservas' || vista === 'ventas-pos' || vista === 'cotizaciones' ? 'active' : ''}`}
                 onClick={() => toggleDropdown('ventas')}
               >
                 <span>🔖</span> Ventas & Reservas
@@ -445,6 +446,16 @@ export default function App() {
                     <div>
                       <strong>Control de Reservas de Tienda</strong>
                       <small>Auditoría de adelantos, saldos y retiros en ferias</small>
+                    </div>
+                  </div>
+                  <div
+                    className={`nav-dropdown-item ${vista === 'cotizaciones' ? 'active' : ''}`}
+                    onClick={() => chooseView('cotizaciones')}
+                  >
+                    <span className="item-icon">📋</span>
+                    <div>
+                      <strong>Historial de Cotizaciones</strong>
+                      <small>Seguimiento de proformas emitidas, clientes y vigencia</small>
                     </div>
                   </div>
                   <div
@@ -604,6 +615,12 @@ export default function App() {
       {vista === 'reservas' && esStaff && (
         <div className="single-view">
           <ReservasList token={token} />
+        </div>
+      )}
+
+      {vista === 'cotizaciones' && esStaff && (
+        <div className="single-view">
+          <CotizacionesList token={token} />
         </div>
       )}
 

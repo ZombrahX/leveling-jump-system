@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { cotizacionService } from '../services/cotizacionService';
 
-export default function CartAndQuotationModal({ isOpen, onClose, cart, setCart, onClearCart, onProcederReserva }) {
+export default function CartAndQuotationModal({ isOpen, onClose, cart = [], setCart, onClearCart, onProcederReserva }) {
   const [activeTab, setActiveTab] = useState('cart'); // 'cart', 'consultar', 'resultado'
   const [nombre, setNombre] = useState('');
   const [telefono, setTelefono] = useState('');
@@ -15,13 +15,14 @@ export default function CartAndQuotationModal({ isOpen, onClose, cart, setCart, 
 
   if (!isOpen) return null;
 
-  const totalCarrito = cart.reduce((acc, item) => acc + (parseFloat(item.precio) * item.cantidad), 0);
+  const totalCarrito = cart.reduce((acc, item) => acc + (parseFloat(item.precio || 0) * (item.cantidad || 1)), 0);
+  const totalUnidades = cart.reduce((acc, item) => acc + (item.cantidad || 1), 0);
 
   const handleUpdateCantidad = (id, delta) => {
     setCart(prev => {
       return prev.map(item => {
         if (item.id === id) {
-          const nuevaCant = item.cantidad + delta;
+          const nuevaCant = (item.cantidad || 1) + delta;
           return nuevaCant > 0 ? { ...item, cantidad: nuevaCant } : null;
         }
         return item;
@@ -51,20 +52,20 @@ export default function CartAndQuotationModal({ isOpen, onClose, cart, setCart, 
     try {
       setCargando(true);
       const payload = {
-        nombreCliente: nombre,
-        telefonoCliente: telefono,
-        emailCliente: email,
-        observaciones,
-        items: cart.map(i => ({ idProducto: i.id, cantidad: i.cantidad }))
+        nombreCliente: nombre.trim(),
+        telefonoCliente: telefono.trim(),
+        emailCliente: email ? email.trim() : null,
+        observaciones: observaciones ? observaciones.trim() : '',
+        items: cart.map(i => ({ idProducto: i.id, cantidad: i.cantidad || 1 }))
       };
 
       const resp = await cotizacionService.crearCotizacion(payload);
       setCotizacionGenerada(resp.cotizacion);
-      setExito(resp.mensaje);
+      setExito(resp.mensaje || 'Cotización formal emitida exitosamente.');
       setActiveTab('resultado');
       if (onClearCart) onClearCart();
     } catch (err) {
-      setError(err.message || 'Error al generar la cotización.');
+      setError(err.message || 'Error al generar la cotización formal.');
     } finally {
       setCargando(false);
     }
@@ -96,348 +97,392 @@ export default function CartAndQuotationModal({ isOpen, onClose, cart, setCart, 
     const msg = encodeURIComponent(
       `¡Hola Leveling Jump! Solicito confirmar mi cotización oficial *${cotizacionGenerada.codigoCotizacion}* por un total de *S/ ${parseFloat(cotizacionGenerada.total).toFixed(2)}* emitida a nombre de ${cotizacionGenerada.nombreCliente}.`
     );
-    window.open(`https://wa.me/51988888777?text=${msg}`, '_blank');
+    window.open(`https://wa.me/51999999999?text=${msg}`, '_blank');
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-3xl overflow-hidden shadow-2xl my-8">
-        {/* Header */}
-        <div className="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-950/40">
-          <div className="flex items-center gap-3">
-            <span className="text-3xl">🛒</span>
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '720px' }}>
+        {/* Cabecera */}
+        <div className="modal-header">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{ fontSize: '24px' }}>🛒</span>
             <div>
-              <h2 className="text-xl font-bold text-white">Carrito de Compras y Cotizaciones</h2>
-              <p className="text-xs text-slate-400">HU-02 / HU-07 — Gestión comercial formal</p>
+              <h3 style={{ margin: 0, fontSize: '1.25rem', color: 'var(--color-cyan)', letterSpacing: '0.5px' }}>
+                CARRITO Y COTIZACIONES
+              </h3>
+              <small style={{ color: '#8B949E', fontSize: '11px', display: 'block' }}>
+                HU-02 / HU-07 — Gestión comercial formal
+              </small>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="text-slate-400 hover:text-white p-2 rounded-lg hover:bg-slate-800 transition"
-          >
-            ✕
-          </button>
+          <button className="modal-close-btn" onClick={onClose}>&times;</button>
         </div>
 
-        {/* Tabs */}
-        <div className="flex border-b border-slate-800 bg-slate-950/20 px-6 pt-3 gap-2">
+        {/* Pestañas estilo auth-tabs */}
+        <div className="auth-tabs" style={{ marginBottom: '16px' }}>
           <button
+            type="button"
+            className={`auth-tab-btn ${activeTab === 'cart' ? 'active' : ''}`}
             onClick={() => setActiveTab('cart')}
-            className={`pb-3 px-4 text-sm font-semibold border-b-2 transition ${
-              activeTab === 'cart'
-                ? 'border-indigo-500 text-indigo-400'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
-            }`}
           >
-            🛍️ Mi Carrito ({cart.reduce((a, b) => a + b.cantidad, 0)})
+            🛍️ Mi Carrito ({totalUnidades})
           </button>
           <button
+            type="button"
+            className={`auth-tab-btn ${activeTab === 'consultar' ? 'active' : ''}`}
             onClick={() => setActiveTab('consultar')}
-            className={`pb-3 px-4 text-sm font-semibold border-b-2 transition ${
-              activeTab === 'consultar'
-                ? 'border-indigo-500 text-indigo-400'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
-            }`}
           >
             🔍 Consultar Cotización
           </button>
           {cotizacionGenerada && (
             <button
+              type="button"
+              className={`auth-tab-btn ${activeTab === 'resultado' ? 'active' : ''}`}
               onClick={() => setActiveTab('resultado')}
-              className={`pb-3 px-4 text-sm font-semibold border-b-2 transition ${
-                activeTab === 'resultado'
-                  ? 'border-indigo-500 text-indigo-400'
-                  : 'border-transparent text-slate-400 hover:text-slate-200'
-              }`}
             >
-              📄 Hoja de Cotización
+              📄 Hoja Oficial ({cotizacionGenerada.codigoCotizacion})
             </button>
           )}
         </div>
 
-        <div className="p-6">
-          {error && (
-            <div className="mb-4 p-3 bg-red-950/50 border border-red-800/80 rounded-xl text-red-200 text-sm">
-              ⚠️ {error}
-            </div>
-          )}
-          {exito && (
-            <div className="mb-4 p-3 bg-emerald-950/50 border border-emerald-800/80 rounded-xl text-emerald-200 text-sm">
-              ✅ {exito}
-            </div>
-          )}
+        {error && <div className="alert err" style={{ marginBottom: '14px' }}>⚠️ {error}</div>}
+        {exito && <div className="alert ok" style={{ marginBottom: '14px' }}>✅ {exito}</div>}
 
-          {/* TAB 1: CARRITO Y GENERADOR DE COTIZACIÓN */}
-          {activeTab === 'cart' && (
-            <div>
-              {cart.length === 0 ? (
-                <div className="text-center py-12">
-                  <div className="text-5xl mb-3">🛍️</div>
-                  <h3 className="text-lg font-medium text-slate-200">Tu carrito comercial está vacío</h3>
-                  <p className="text-slate-400 text-sm mt-1">Explora el catálogo y agrega maquetas o suministros.</p>
-                </div>
-              ) : (
-                <div className="space-y-6">
-                  {/* Lista de productos */}
-                  <div className="space-y-3 max-h-60 overflow-y-auto pr-2">
-                    {cart.map(item => (
-                      <div
-                        key={item.id}
-                        className="flex items-center justify-between p-3 bg-slate-800/50 rounded-xl border border-slate-700/50"
-                      >
-                        <div className="flex-1 pr-4">
-                          <h4 className="text-sm font-semibold text-white">{item.nombre}</h4>
-                          <span className="text-xs text-indigo-400 font-mono">
-                            S/ {parseFloat(item.precio).toFixed(2)} c/u
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <div className="flex items-center bg-slate-900 border border-slate-700 rounded-lg">
-                            <button
-                              onClick={() => handleUpdateCantidad(item.id, -1)}
-                              className="px-2.5 py-1 text-slate-400 hover:text-white"
-                            >
-                              -
-                            </button>
-                            <span className="px-2 text-sm font-bold text-white">{item.cantidad}</span>
-                            <button
-                              onClick={() => handleUpdateCantidad(item.id, 1)}
-                              className="px-2.5 py-1 text-slate-400 hover:text-white"
-                            >
-                              +
-                            </button>
-                          </div>
-                          <span className="text-sm font-bold text-emerald-400 w-20 text-right">
-                            S/ {(parseFloat(item.precio) * item.cantidad).toFixed(2)}
+        {/* PESTAÑA 1: MI CARRITO Y SOLICITUD DE COTIZACIÓN */}
+        {activeTab === 'cart' && (
+          <div>
+            {cart.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '36px 12px', color: '#8B949E' }}>
+                <span style={{ fontSize: '42px', display: 'block', marginBottom: '8px' }}>🛍️</span>
+                <strong style={{ color: '#F0F6FC', fontSize: '15px' }}>Tu carrito comercial está vacío</strong>
+                <p style={{ fontSize: '13px', margin: '6px 0 16px' }}>
+                  Explora el catálogo y agrega maquetas Gunpla o suministros para cotizar.
+                </p>
+                <button type="button" className="secondary" onClick={onClose}>Volver al Catálogo</button>
+              </div>
+            ) : (
+              <div>
+                {/* Listado de ítems */}
+                <div style={{ maxHeight: '220px', overflowY: 'auto', marginBottom: '16px', border: '1px solid #30363D', borderRadius: '8px', background: '#0D1117', padding: '8px' }}>
+                  {cart.map(item => (
+                    <div
+                      key={item.id}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '12px',
+                        padding: '8px 10px',
+                        borderBottom: '1px solid #21262D'
+                      }}
+                    >
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <h5 style={{ margin: 0, fontSize: '13px', color: '#FFFFFF', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {item.nombre}
+                        </h5>
+                        <small style={{ color: 'var(--color-cyan)', fontSize: '11px', fontFamily: 'monospace' }}>
+                          S/ {parseFloat(item.precio || 0).toFixed(2)} c/u
+                        </small>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        {/* Selector de cantidad */}
+                        <div style={{ display: 'flex', alignItems: 'center', background: '#161B22', border: '1px solid #30363D', borderRadius: '6px' }}>
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateCantidad(item.id, -1)}
+                            style={{ background: 'transparent', border: 'none', color: '#C9D1D9', padding: '4px 8px', cursor: 'pointer', fontWeight: 'bold' }}
+                          >
+                            -
+                          </button>
+                          <span style={{ padding: '0 8px', fontSize: '13px', fontWeight: 'bold', color: '#FFFFFF' }}>
+                            {item.cantidad || 1}
                           </span>
                           <button
-                            onClick={() => handleRemoveItem(item.id)}
-                            className="text-red-400 hover:text-red-300 p-1"
-                            title="Quitar"
+                            type="button"
+                            onClick={() => handleUpdateCantidad(item.id, 1)}
+                            style={{ background: 'transparent', border: 'none', color: '#C9D1D9', padding: '4px 8px', cursor: 'pointer', fontWeight: 'bold' }}
                           >
-                            ✕
+                            +
                           </button>
                         </div>
-                      </div>
-                    ))}
-                  </div>
 
-                  {/* Resumen de totales */}
-                  <div className="p-4 bg-slate-950/60 rounded-xl border border-slate-800 space-y-2">
-                    <div className="flex justify-between text-slate-400 text-sm">
-                      <span>Moneda comercial:</span>
-                      <span className="font-semibold text-slate-300">PEN (Soles peruanos S/)</span>
-                    </div>
-                    <div className="flex justify-between text-white font-bold text-lg pt-2 border-t border-slate-800">
-                      <span>Importe Total:</span>
-                      <span className="text-emerald-400 font-mono">S/ {totalCarrito.toFixed(2)}</span>
-                    </div>
-                    <p className="text-xs text-amber-400/90 pt-1">
-                      ℹ️ El carrito es una selección temporal y no bloquea inventario. La cotización formal verifica stock activo antes de emitirse y congela precios por 7 días.
-                    </p>
-                  </div>
+                        {/* Subtotal */}
+                        <strong style={{ fontSize: '13px', color: '#10B981', minWidth: '85px', textAlign: 'right', fontFamily: 'monospace' }}>
+                          S/ {(parseFloat(item.precio || 0) * (item.cantidad || 1)).toFixed(2)}
+                        </strong>
 
-                  {/* HU-02 Punto 7: Opciones de confirmación desde el carrito (Reserva Múltiple vs Cotización) */}
-                  <div className="flex flex-col sm:flex-row gap-3">
-                    <button
-                      type="button"
-                      onClick={() => onProcederReserva && onProcederReserva(cart)}
-                      className="flex-1 bg-cyan-700 hover:bg-cyan-600 text-white font-medium py-2.5 px-4 rounded-xl transition flex items-center justify-center gap-2 text-sm shadow-md"
-                      title="Confirmar estos productos como una reserva comercial con código RES (HU-06)"
-                    >
-                      <span>🔖</span> Confirmar Selección como Reserva Múltiple (HU-06)
-                    </button>
-                  </div>
-
-                  {/* Formulario de Cotización Formal (HU-07) */}
-                  <form onSubmit={handleGenerarCotizacion} className="space-y-4 pt-2 border-t border-slate-800">
-                    <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-                      <span>📋</span> Solicitar Cotización Formal Oficial (HU-07)
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-xs font-medium text-slate-400 mb-1">Tu Nombre Completo *</label>
-                        <input
-                          type="text"
-                          required
-                          value={nombre}
-                          onChange={e => setNombre(e.target.value)}
-                          placeholder="Ej: César Sánchez"
-                          className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-slate-400 mb-1">Teléfono / WhatsApp *</label>
-                        <input
-                          type="tel"
-                          required
-                          value={telefono}
-                          onChange={e => setTelefono(e.target.value)}
-                          placeholder="Ej: 999 888 777"
-                          className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-                        />
+                        {/* Botón eliminar */}
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveItem(item.id)}
+                          style={{ background: 'transparent', border: 'none', color: '#EF4444', cursor: 'pointer', padding: '4px 6px', fontSize: '14px' }}
+                          title="Quitar del carrito"
+                        >
+                          ✕
+                        </button>
                       </div>
                     </div>
-                    <div>
-                      <label className="block text-xs font-medium text-slate-400 mb-1">Correo Electrónico (Opcional)</label>
-                      <input
-                        type="email"
-                        value={email}
-                        onChange={e => setEmail(e.target.value)}
-                        placeholder="tu-correo@ejemplo.com"
-                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-slate-400 mb-1">Notas o Consultas Adicionales</label>
+                  ))}
+                </div>
+
+                {/* Resumen de totales */}
+                <div className="reserva-breakdown" style={{ marginBottom: '14px' }}>
+                  <div className="reserva-breakdown-row">
+                    <span>Moneda comercial:</span>
+                    <span>PEN (Soles peruanos S/)</span>
+                  </div>
+                  <div className="reserva-breakdown-row" style={{ color: 'var(--color-cyan)', fontSize: '16px' }}>
+                    <span>Importe Total ({totalUnidades} {totalUnidades === 1 ? 'unidad' : 'unidades'}):</span>
+                    <strong>S/ {totalCarrito.toFixed(2)}</strong>
+                  </div>
+                  <p style={{ margin: '8px 0 0', fontSize: '11.5px', color: 'var(--color-gold)', lineHeight: 1.4 }}>
+                    ℹ️ El carrito es una selección temporal y no bloquea inventario. La cotización formal verifica stock activo antes de emitirse y congela precios por 7 días.
+                  </p>
+                </div>
+
+                {/* HU-02: Confirmar como Reserva Múltiple */}
+                <div style={{ marginBottom: '16px' }}>
+                  <button
+                    type="button"
+                    onClick={() => onProcederReserva && onProcederReserva(cart)}
+                    className="primary"
+                    style={{
+                      width: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      background: 'var(--color-cyan)',
+                      color: '#080B0F',
+                      fontWeight: 'bold',
+                      boxShadow: '0 0 12px var(--color-cyan-glow)'
+                    }}
+                  >
+                    <span>🔖</span> Confirmar Selección como Reserva Múltiple (HU-06)
+                  </button>
+                </div>
+
+                {/* Formulario de Cotización Formal (HU-07) */}
+                <form onSubmit={handleGenerarCotizacion} style={{ borderTop: '1px solid #30363D', paddingTop: '14px' }}>
+                  <h4 style={{ margin: '0 0 12px', fontSize: '14px', color: '#F0F6FC', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span>📋</span> Solicitar Cotización Formal Oficial (HU-07)
+                  </h4>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '10px', marginBottom: '10px' }}>
+                    <label style={{ margin: 0 }}>
+                      Tu Nombre Completo *
                       <input
                         type="text"
-                        value={observaciones}
-                        onChange={e => setObservaciones(e.target.value)}
-                        placeholder="Ej: Deseo retirar en feria de Arenales o envío a Trujillo"
-                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                        required
+                        value={nombre}
+                        onChange={e => setNombre(e.target.value)}
+                        placeholder="Ej: César Sánchez"
+                        style={{ marginTop: '4px' }}
                       />
-                    </div>
-                    <div className="flex gap-3 pt-2">
-                      <button
-                        type="submit"
-                        disabled={cargando}
-                        className="flex-1 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white font-semibold py-2.5 px-4 rounded-xl shadow-lg transition disabled:opacity-50 flex items-center justify-center gap-2"
-                      >
-                        {cargando ? 'Generando Cotización...' : '📄 Generar Cotización Oficial'}
-                      </button>
-                    </div>
-                  </form>
+                    </label>
+                    <label style={{ margin: 0 }}>
+                      Teléfono / WhatsApp *
+                      <input
+                        type="tel"
+                        required
+                        value={telefono}
+                        onChange={e => setTelefono(e.target.value)}
+                        placeholder="Ej: 999 888 777"
+                        style={{ marginTop: '4px' }}
+                      />
+                    </label>
+                  </div>
+                  <label style={{ display: 'block', margin: '0 0 10px' }}>
+                    Correo Electrónico (Opcional)
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={e => setEmail(e.target.value)}
+                      placeholder="tu-correo@ejemplo.com"
+                      style={{ marginTop: '4px' }}
+                    />
+                  </label>
+                  <label style={{ display: 'block', margin: '0 0 14px' }}>
+                    Notas o Consultas Adicionales
+                    <input
+                      type="text"
+                      value={observaciones}
+                      onChange={e => setObservaciones(e.target.value)}
+                      placeholder="Ej: Deseo retirar en feria de Arenales o consultar despacho a provincia"
+                      style={{ marginTop: '4px' }}
+                    />
+                  </label>
+                  <button
+                    type="submit"
+                    className="primary"
+                    disabled={cargando}
+                    style={{ width: '100%', padding: '12px', fontSize: '14px', fontWeight: 'bold' }}
+                  >
+                    {cargando ? 'Generando Cotización...' : '📄 Generar Cotización Oficial'}
+                  </button>
+                </form>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* PESTAÑA 2: CONSULTAR COTIZACIÓN POR CÓDIGO */}
+        {activeTab === 'consultar' && (
+          <div style={{ padding: '6px 0' }}>
+            <p style={{ fontSize: '13px', color: '#C9D1D9', marginBottom: '14px' }}>
+              Ingresa el código correlativo de tu cotización (ej. <code>COT-2026-1234</code>) para revisar su vigencia y detalle de productos.
+            </p>
+            <form onSubmit={handleBuscarCotizacion} style={{ display: 'flex', gap: '8px' }}>
+              <input
+                type="text"
+                required
+                value={codigoBusqueda}
+                onChange={e => setCodigoBusqueda(e.target.value.toUpperCase())}
+                placeholder="COT-2026-XXXX"
+                style={{ flex: 1, textTransform: 'uppercase', fontFamily: 'monospace', fontSize: '14px' }}
+              />
+              <button
+                type="submit"
+                className="primary"
+                disabled={cargando}
+                style={{ whiteSpace: 'nowrap', padding: '0 20px' }}
+              >
+                {cargando ? 'Buscando...' : '🔍 Buscar'}
+              </button>
+            </form>
+          </div>
+        )}
+
+        {/* PESTAÑA 3: HOJA DE COTIZACIÓN FORMAL (IMPRIMIBLE) */}
+        {activeTab === 'resultado' && cotizacionGenerada && (
+          <div>
+            <div
+              id="hoja-cotizacion"
+              style={{
+                background: '#FFFFFF',
+                color: '#111827',
+                padding: '20px',
+                borderRadius: '8px',
+                marginBottom: '16px',
+                border: '1px solid #E2E8F0',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+              }}
+            >
+              {/* Cabecera Documento */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #E2E8F0', paddingBottom: '12px', marginBottom: '12px' }}>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '20px', fontWeight: '900', color: '#0F172A', letterSpacing: '0.5px' }}>
+                    LEVELING JUMP
+                  </h3>
+                  <p style={{ margin: '2px 0', fontSize: '11px', color: '#64748B' }}>
+                    Model Kits, Gunpla & Coleccionables de Importación
+                  </p>
+                  <p style={{ margin: 0, fontSize: '11px', color: '#64748B' }}>
+                    Lima, Perú | WhatsApp: +51 999 888 777
+                  </p>
                 </div>
-              )}
-            </div>
-          )}
-
-          {/* TAB 2: CONSULTAR COTIZACIÓN POR CÓDIGO */}
-          {activeTab === 'consultar' && (
-            <div className="space-y-4">
-              <p className="text-sm text-slate-300">
-                Ingresa el código correlativo de tu cotización (ej. <code>COT-2026-1234</code>) para revisar su vigencia y detalle de productos.
-              </p>
-              <form onSubmit={handleBuscarCotizacion} className="flex gap-2">
-                <input
-                  type="text"
-                  required
-                  value={codigoBusqueda}
-                  onChange={e => setCodigoBusqueda(e.target.value.toUpperCase())}
-                  placeholder="COT-2026-XXXX"
-                  className="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 font-mono uppercase"
-                />
-                <button
-                  type="submit"
-                  disabled={cargando}
-                  className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2.5 rounded-xl font-medium transition disabled:opacity-50"
-                >
-                  {cargando ? 'Buscando...' : 'Buscar'}
-                </button>
-              </form>
-            </div>
-          )}
-
-          {/* TAB 3: VISTA DE LA COTIZACIÓN FORMAL (IMPRIMIBLE) */}
-          {activeTab === 'resultado' && cotizacionGenerada && (
-            <div className="space-y-6">
-              {/* Documento oficial */}
-              <div id="hoja-cotizacion" className="bg-white text-slate-900 p-6 rounded-2xl shadow-xl space-y-5 border border-slate-200">
-                <div className="flex justify-between items-start border-b border-slate-200 pb-4">
-                  <div>
-                    <h3 className="text-2xl font-black tracking-tight text-slate-900">LEVELING JUMP</h3>
-                    <p className="text-xs text-slate-500">Model Kits, Gunpla & Coleccionables de Importación</p>
-                    <p className="text-xs text-slate-500">Lima, Perú | WhatsApp: +51 999 888 777</p>
-                  </div>
-                  <div className="text-right">
-                    <span className="inline-block bg-indigo-100 text-indigo-800 text-xs px-2.5 py-1 rounded-md font-bold uppercase">
-                      Cotización Formal
-                    </span>
-                    <h4 className="text-lg font-black text-indigo-600 font-mono mt-1">
-                      {cotizacionGenerada.codigoCotizacion}
-                    </h4>
-                    <p className="text-xs text-slate-500">
-                      Emisión: {new Date(cotizacionGenerada.fechaEmision).toLocaleDateString('es-PE')}
-                    </p>
-                    <p className="text-xs text-amber-600 font-semibold">
-                      Válida hasta: {new Date(cotizacionGenerada.fechaVencimiento).toLocaleDateString('es-PE')}
-                    </p>
-                  </div>
+                <div style={{ textAlign: 'right' }}>
+                  <span style={{ display: 'inline-block', background: '#EEF2FF', color: '#4F46E5', fontSize: '11px', padding: '2px 8px', borderRadius: '4px', fontWeight: 'bold', textTransform: 'uppercase' }}>
+                    Cotización Formal
+                  </span>
+                  <h4 style={{ margin: '4px 0 2px', fontSize: '16px', fontWeight: '900', color: '#4F46E5', fontFamily: 'monospace' }}>
+                    {cotizacionGenerada.codigoCotizacion}
+                  </h4>
+                  <small style={{ display: 'block', fontSize: '10.5px', color: '#64748B' }}>
+                    Emisión: {new Date(cotizacionGenerada.fechaEmision).toLocaleDateString('es-PE')}
+                  </small>
+                  <small style={{ display: 'block', fontSize: '10.5px', color: '#D97706', fontWeight: 'bold' }}>
+                    Válida hasta: {new Date(cotizacionGenerada.fechaVencimiento).toLocaleDateString('es-PE')}
+                  </small>
                 </div>
+              </div>
 
-                {/* Cliente */}
-                <div className="grid grid-cols-2 gap-4 text-xs bg-slate-50 p-3 rounded-lg border border-slate-200">
-                  <div>
-                    <p className="font-semibold text-slate-700">CLIENTE:</p>
-                    <p className="text-slate-900 font-bold">{cotizacionGenerada.nombreCliente}</p>
-                    <p className="text-slate-600">WhatsApp: {cotizacionGenerada.telefonoCliente}</p>
-                  </div>
-                  <div>
-                    <p className="font-semibold text-slate-700">CORREO / NOTAS:</p>
-                    <p className="text-slate-600">{cotizacionGenerada.emailCliente || 'No especificado'}</p>
-                    <p className="text-slate-600 italic">{cotizacionGenerada.observaciones || 'Sin notas adicionales'}</p>
-                  </div>
+              {/* Datos Cliente */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', background: '#F8FAFC', padding: '10px 12px', borderRadius: '6px', border: '1px solid #E2E8F0', marginBottom: '12px', fontSize: '12px' }}>
+                <div>
+                  <strong style={{ color: '#475569', display: 'block', fontSize: '10px', textTransform: 'uppercase' }}>Cliente:</strong>
+                  <span style={{ fontWeight: 'bold', color: '#0F172A' }}>{cotizacionGenerada.nombreCliente}</span>
+                  <div style={{ color: '#64748B' }}>WhatsApp: {cotizacionGenerada.telefonoCliente}</div>
                 </div>
+                <div>
+                  <strong style={{ color: '#475569', display: 'block', fontSize: '10px', textTransform: 'uppercase' }}>Correo / Notas:</strong>
+                  <div style={{ color: '#64748B' }}>{cotizacionGenerada.emailCliente || 'No especificado'}</div>
+                  <div style={{ color: '#64748B', fontStyle: 'italic' }}>{cotizacionGenerada.observaciones || 'Sin notas adicionales'}</div>
+                </div>
+              </div>
 
-                {/* Tabla de ítems */}
-                <table className="w-full text-xs border-collapse">
-                  <thead>
-                    <tr className="border-b border-slate-300 text-slate-600 text-left">
-                      <th className="py-2">Ítem / Producto</th>
-                      <th className="py-2 text-center">Cant.</th>
-                      <th className="py-2 text-right">P. Unitario</th>
-                      <th className="py-2 text-right">Subtotal</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {cotizacionGenerada.items?.map(it => (
-                      <tr key={it.id || it.idProducto}>
-                        <td className="py-2.5 font-medium text-slate-800">{it.nombreProducto}</td>
-                        <td className="py-2.5 text-center text-slate-600">{it.cantidad}</td>
-                        <td className="py-2.5 text-right font-mono text-slate-600">
-                          S/ {parseFloat(it.precioUnitario).toFixed(2)}
-                        </td>
-                        <td className="py-2.5 text-right font-mono font-bold text-slate-900">
-                          S/ {parseFloat(it.subtotal).toFixed(2)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr className="border-t-2 border-slate-800">
-                      <td colSpan="3" className="py-2.5 text-right font-bold text-slate-700">TOTAL ESTIMADO:</td>
-                      <td className="py-2.5 text-right font-mono font-black text-indigo-700 text-sm">
-                        S/ {parseFloat(cotizacionGenerada.total).toFixed(2)}
+              {/* Tabla de ítems */}
+              <table style={{ width: '100%', fontSize: '12px', borderCollapse: 'collapse', marginBottom: '12px' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid #CBD5E1', color: '#475569', textAlign: 'left' }}>
+                    <th style={{ padding: '6px 0' }}>Ítem / Producto</th>
+                    <th style={{ padding: '6px 0', textAlign: 'center' }}>Cant.</th>
+                    <th style={{ padding: '6px 0', textAlign: 'right' }}>P. Unitario</th>
+                    <th style={{ padding: '6px 0', textAlign: 'right' }}>Subtotal</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cotizacionGenerada.items?.map(it => (
+                    <tr key={it.id || it.idProducto} style={{ borderBottom: '1px solid #F1F5F9' }}>
+                      <td style={{ padding: '6px 0', color: '#1E293B', fontWeight: '500' }}>{it.nombreProducto}</td>
+                      <td style={{ padding: '6px 0', textAlign: 'center', color: '#475569' }}>{it.cantidad}</td>
+                      <td style={{ padding: '6px 0', textAlign: 'right', fontFamily: 'monospace', color: '#475569' }}>
+                        S/ {parseFloat(it.precioUnitario).toFixed(2)}
+                      </td>
+                      <td style={{ padding: '6px 0', textAlign: 'right', fontFamily: 'monospace', fontWeight: 'bold', color: '#0F172A' }}>
+                        S/ {parseFloat(it.subtotal).toFixed(2)}
                       </td>
                     </tr>
-                  </tfoot>
-                </table>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr style={{ borderTop: '2px solid #0F172A' }}>
+                    <td colSpan="3" style={{ padding: '8px 0', textAlign: 'right', fontWeight: 'bold', color: '#334155' }}>
+                      TOTAL ESTIMADO:
+                    </td>
+                    <td style={{ padding: '8px 0', textAlign: 'right', fontFamily: 'monospace', fontWeight: '900', color: '#4F46E5', fontSize: '15px' }}>
+                      S/ {parseFloat(cotizacionGenerada.total).toFixed(2)}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
 
-                {/* Aviso legal obligatorio */}
-                <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-900 text-2xs leading-relaxed">
-                  ⚠️ <strong>Condiciones comerciales:</strong> Los precios cotizados se mantienen vigentes durante 7 días calendario a partir de su emisión. Esta cotización comercial <strong>no reserva stock físico en almacén</strong>. La separación de mercadería se efectiviza únicamente con el registro de reserva formal o pago de adelanto.
-                </div>
-              </div>
-
-              {/* Botones de acción */}
-              <div className="flex flex-wrap gap-3">
-                <button
-                  onClick={handleImprimir}
-                  className="flex-1 bg-slate-800 hover:bg-slate-700 text-white font-medium py-2.5 px-4 rounded-xl transition flex items-center justify-center gap-2"
-                >
-                  🖨️ Imprimir / Guardar PDF
-                </button>
-                <button
-                  onClick={handleCompartirWhatsApp}
-                  className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-2.5 px-4 rounded-xl transition flex items-center justify-center gap-2"
-                >
-                  💬 Enviar por WhatsApp
-                </button>
+              {/* Condiciones comerciales */}
+              <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', padding: '8px 10px', borderRadius: '6px', fontSize: '11px', color: '#92400E', lineHeight: 1.4 }}>
+                ⚠️ <strong>Condiciones comerciales:</strong> Los precios cotizados se mantienen vigentes durante 7 días calendario a partir de su emisión. Esta cotización comercial <strong>no reserva stock físico en almacén</strong>. La separación de mercadería se efectiviza únicamente con el registro de reserva formal o pago de adelanto.
               </div>
             </div>
-          )}
-        </div>
+
+            {/* Botones de acción */}
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={handleImprimir}
+                className="secondary"
+                style={{ flex: 1, padding: '10px', fontSize: '13px' }}
+              >
+                🖨️ Imprimir / Guardar PDF
+              </button>
+              <button
+                type="button"
+                onClick={handleCompartirWhatsApp}
+                className="primary"
+                style={{ flex: 1, padding: '10px', fontSize: '13px', background: '#25D366', color: '#000000', fontWeight: 'bold' }}
+              >
+                💬 Enviar por WhatsApp
+              </button>
+              <button
+                type="button"
+                className="secondary"
+                onClick={onClose}
+                style={{ padding: '10px 16px', fontSize: '13px' }}
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

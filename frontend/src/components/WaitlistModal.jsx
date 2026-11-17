@@ -26,17 +26,17 @@ export default function WaitlistModal({ isOpen, onClose, producto, usuarioActual
       setCargando(true);
       const resp = await interesService.registrarInteres({
         idProducto: producto.id,
-        nombreCliente: nombre,
-        telefonoCliente: telefono,
-        emailCliente: email,
-        notas
+        nombreCliente: nombre.trim(),
+        telefonoCliente: telefono.trim(),
+        emailCliente: email ? email.trim() : null,
+        notas: notas ? notas.trim() : ''
       });
 
-      setExito(resp.mensaje);
+      setExito(resp.mensaje || '¡Registrado con éxito en la lista de espera!');
       setTimeout(() => {
         onClose();
         setExito('');
-      }, 2500);
+      }, 2000);
     } catch (err) {
       setError(err.message || 'Error al registrar tu interés.');
     } finally {
@@ -45,125 +45,126 @@ export default function WaitlistModal({ isOpen, onClose, producto, usuarioActual
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
-        <div className="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-950/40">
-          <div className="flex items-center gap-3">
-            <span className="text-3xl">🔔</span>
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '480px' }}>
+        {/* Cabecera */}
+        <div className="modal-header">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{ fontSize: '24px' }}>🔔</span>
             <div>
-              <h2 className="text-lg font-bold text-white">Lista de Espera / Restock</h2>
-              <p className="text-xs text-slate-400">HU-08 — Alerta de reposición comercial</p>
+              <h3 style={{ margin: 0, fontSize: '1.25rem', color: 'var(--color-cyan)', letterSpacing: '0.5px' }}>
+                LISTA DE ESPERA / RESTOCK
+              </h3>
+              <small style={{ color: '#8B949E', fontSize: '11px', display: 'block' }}>
+                HU-08 — Alerta de reposición comercial
+              </small>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition"
-          >
-            ✕
-          </button>
+          <button className="modal-close-btn" onClick={onClose}>&times;</button>
         </div>
 
-        <div className="p-6">
-          {/* Ficha rápida del producto */}
-          <div className="p-3 bg-slate-800/60 rounded-xl border border-slate-700/60 flex items-center gap-3 mb-4">
-            {producto.imagenUrl ? (
-              <img
-                src={producto.imagenUrl}
-                alt={producto.nombre}
-                className="w-12 h-12 rounded-lg object-cover bg-slate-950"
-              />
-            ) : (
-              <div className="w-12 h-12 rounded-lg bg-slate-950 flex items-center justify-center text-xs text-slate-500 font-bold">
-                LJ
-              </div>
-            )}
-            <div className="flex-1 min-w-0">
-              <h4 className="text-sm font-semibold text-white truncate">{producto.nombre}</h4>
-              <p className="text-xs text-slate-400">{producto.marca || 'Marca'} · {producto.serie || 'Gunpla'}</p>
-              <p className="text-xs font-bold text-indigo-400">
-                {producto.precio ? `S/ ${parseFloat(producto.precio).toFixed(2)}` : 'Precio por confirmar'}
-              </p>
+        {/* Ficha rápida del producto */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 12px', background: '#0D1117', border: '1px solid #30363D', borderRadius: '8px', marginBottom: '14px' }}>
+          {producto.imagenUrl ? (
+            <img
+              src={producto.imagenUrl}
+              alt={producto.nombre}
+              style={{ width: '48px', height: '48px', objectFit: 'cover', borderRadius: '6px', border: '1px solid #30363D' }}
+              onError={e => { e.currentTarget.style.display = 'none'; }}
+            />
+          ) : (
+            <div style={{ width: '48px', height: '48px', borderRadius: '6px', background: '#161B22', border: '1px solid #30363D', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', color: '#8B949E', fontWeight: 'bold' }}>
+              LJ
             </div>
+          )}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <h4 style={{ margin: 0, fontSize: '13.5px', color: '#FFFFFF', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {producto.nombre}
+            </h4>
+            <small style={{ color: '#8B949E', fontSize: '11px', display: 'block' }}>
+              {producto.marca || 'Bandai'} · {producto.serie || 'Gunpla'}
+            </small>
+            <strong style={{ color: 'var(--color-cyan)', fontSize: '12.5px', fontFamily: 'monospace' }}>
+              {producto.precio ? `S/ ${parseFloat(producto.precio).toFixed(2)}` : 'Precio referencial'}
+            </strong>
           </div>
+        </div>
 
-          <p className="text-xs text-slate-300 mb-4 leading-relaxed">
-            Este modelo se encuentra agotado o en proceso de importación. Déjanos tus datos para avisarte por WhatsApp apenas arribe un nuevo lote y tengas prioridad de reserva.
-          </p>
+        <p style={{ fontSize: '12px', color: '#C9D1D9', lineHeight: 1.45, margin: '0 0 14px' }}>
+          Este modelo se encuentra agotado o en proceso de importación. Déjanos tus datos para avisarte por WhatsApp apenas arribe un nuevo lote y tengas prioridad de reserva.
+        </p>
 
-          {error && (
-            <div className="mb-4 p-3 bg-red-950/50 border border-red-800/80 rounded-xl text-red-200 text-xs">
-              ⚠️ {error}
-            </div>
-          )}
+        {error && <div className="alert err" style={{ marginBottom: '14px' }}>⚠️ {error}</div>}
+        {exito && <div className="alert ok" style={{ marginBottom: '14px' }}>✅ {exito}</div>}
 
-          {exito && (
-            <div className="mb-4 p-3 bg-emerald-950/50 border border-emerald-800/80 rounded-xl text-emerald-200 text-xs">
-              ✅ {exito}
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-3">
-            <div>
-              <label className="block text-xs font-medium text-slate-400 mb-1">Tu Nombre Completo *</label>
+        <form onSubmit={handleSubmit}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
+            <label style={{ margin: 0 }}>
+              Tu Nombre *
               <input
                 type="text"
                 required
                 value={nombre}
                 onChange={e => setNombre(e.target.value)}
                 placeholder="Ej: César Sánchez"
-                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                style={{ marginTop: '4px' }}
               />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-400 mb-1">WhatsApp de Contacto *</label>
+            </label>
+            <label style={{ margin: 0 }}>
+              WhatsApp *
               <input
                 type="tel"
                 required
                 value={telefono}
                 onChange={e => setTelefono(e.target.value)}
                 placeholder="Ej: 999 888 777"
-                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                style={{ marginTop: '4px' }}
               />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-400 mb-1">Correo Electrónico (Opcional)</label>
-              <input
-                type="email"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                placeholder="tu-correo@ejemplo.com"
-                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-400 mb-1">Notas adicionales (Opcional)</label>
-              <input
-                type="text"
-                value={notas}
-                onChange={e => setNotas(e.target.value)}
-                placeholder="Ej: ¿Llega la versión con base o solo el kit?"
-                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-              />
-            </div>
+            </label>
+          </div>
 
-            <div className="pt-2 flex gap-3">
-              <button
-                type="button"
-                onClick={onClose}
-                className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium py-2 rounded-xl text-sm transition"
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                disabled={cargando}
-                className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white font-medium py-2 rounded-xl text-sm transition disabled:opacity-50"
-              >
-                {cargando ? 'Anotando...' : '🔔 Avisarme cuando llegue'}
-              </button>
-            </div>
-          </form>
-        </div>
+          <label style={{ display: 'block', margin: '0 0 10px' }}>
+            Correo Electrónico (Opcional)
+            <input
+              type="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              placeholder="tu-correo@ejemplo.com"
+              style={{ marginTop: '4px' }}
+            />
+          </label>
+
+          <label style={{ display: 'block', margin: '0 0 16px' }}>
+            Notas adicionales (Opcional)
+            <input
+              type="text"
+              value={notas}
+              onChange={e => setNotas(e.target.value)}
+              placeholder="Ej: ¿Llega versión especial o standard?"
+              style={{ marginTop: '4px' }}
+            />
+          </label>
+
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button
+              type="button"
+              className="secondary"
+              onClick={onClose}
+              disabled={cargando}
+              style={{ flex: 1, padding: '10px' }}
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              className="primary"
+              disabled={cargando}
+              style={{ flex: 1, padding: '10px', fontWeight: 'bold' }}
+            >
+              {cargando ? 'Anotando...' : '🔔 Avisarme al Arribar'}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );

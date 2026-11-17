@@ -47,23 +47,6 @@ export default function PublicCatalog({
           <p className="muted">Explora el catálogo disponible de Leveling Jump con disponibilidad de stock en tiempo real.</p>
         </div>
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-          {cartCount > 0 && (
-            <button
-              type="button"
-              className="primary"
-              onClick={onAbrirCarrito}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                background: '#4F46E5',
-                color: '#FFFFFF',
-                boxShadow: '0 0 12px rgba(79, 70, 229, 0.4)'
-              }}
-            >
-              <span>🛒</span> Carrito / Cotizar ({cartCount})
-            </button>
-          )}
           {bolsa.length > 0 && (
             <button
               type="button"

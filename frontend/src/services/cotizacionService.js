@@ -1,6 +1,6 @@
-const API_URL = import.meta.env.VITE_API_URL 
-  ? `${import.meta.env.VITE_API_URL}/cotizaciones`
-  : 'http://localhost:4000/api/cotizaciones';
+import { API_BASE_URL } from './apiConfig';
+
+const API_URL = `${API_BASE_URL}/api/cotizaciones`;
 
 const handleResponse = async (res) => {
   const data = await res.json().catch(() => null);
@@ -11,7 +11,7 @@ const handleResponse = async (res) => {
 };
 
 export const cotizacionService = {
-  // HU-07: Generar y registrar cotización formal
+  // Generar y registrar cotización formal
   async crearCotizacion(payload) {
     const res = await fetch(API_URL, {
       method: 'POST',
@@ -21,7 +21,7 @@ export const cotizacionService = {
     return handleResponse(res);
   },
 
-  // HU-07: Consultar cotización por código correlativo
+  // Consultar cotización por código correlativo
   async obtenerPorCodigo(codigo) {
     const res = await fetch(`${API_URL}/${encodeURIComponent(codigo)}`, {
       method: 'GET',
@@ -30,7 +30,7 @@ export const cotizacionService = {
     return handleResponse(res);
   },
 
-  // HU-07: Listar cotizaciones para staff
+  // Listar cotizaciones para staff
   async listar(token) {
     const res = await fetch(API_URL, {
       method: 'GET',

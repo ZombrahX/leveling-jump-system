@@ -1,6 +1,6 @@
-const API_URL = import.meta.env.VITE_API_URL 
-  ? `${import.meta.env.VITE_API_URL}/intereses`
-  : 'http://localhost:4000/api/intereses';
+import { API_BASE_URL } from './apiConfig';
+
+const API_URL = `${API_BASE_URL}/api/intereses`;
 
 const handleResponse = async (res) => {
   const data = await res.json().catch(() => null);
@@ -11,7 +11,7 @@ const handleResponse = async (res) => {
 };
 
 export const interesService = {
-  // HU-08: Anotarse en lista de espera / notificar reposición
+  // Anotarse en lista de espera / notificar reposición
   async registrarInteres(payload) {
     const res = await fetch(API_URL, {
       method: 'POST',
@@ -21,7 +21,7 @@ export const interesService = {
     return handleResponse(res);
   },
 
-  // HU-08: Consultar resumen de demanda para Staff
+  // Consultar resumen de demanda para Staff
   async listarResumen(token) {
     const res = await fetch(API_URL, {
       method: 'GET',
@@ -33,7 +33,7 @@ export const interesService = {
     return handleResponse(res);
   },
 
-  // HU-08: Actualizar estado de notificación al cliente
+  // Actualizar estado de notificación al cliente
   async actualizarEstado(idInteres, estado, token) {
     const res = await fetch(`${API_URL}/${idInteres}/estado`, {
       method: 'PATCH',

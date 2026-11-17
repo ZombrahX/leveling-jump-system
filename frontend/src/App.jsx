@@ -9,7 +9,6 @@ import UserProfile from './components/UserProfile';
 import StaffManagement from './components/StaffManagement';
 import LoginModal from './components/LoginModal';
 import ReservationModal from './components/ReservationModal';
-import MultiReservationModal from './components/MultiReservationModal';
 import VentasPOS from './components/VentasPOS';
 import OrderTrackingModal from './components/OrderTrackingModal';
 import CartAndQuotationModal from './components/CartAndQuotationModal';
@@ -56,7 +55,6 @@ export default function App() {
   // Modales
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [productoReserva, setProductoReserva] = useState(null);
-  const [showMultiModal, setShowMultiModal] = useState(false);
   const [showTrackingModal, setShowTrackingModal] = useState(false);
   const [showCartModal, setShowCartModal] = useState(false);
   const [productoWaitlist, setProductoWaitlist] = useState(null);
@@ -90,43 +88,12 @@ export default function App() {
     try { localStorage.removeItem('lj_carrito_comercial'); } catch (_) {}
   };
 
-  // Bolsa de Reserva (Reservas en Masa) con persistencia en localStorage
-  const [bolsaReservas, setBolsaReservas] = useState(() => {
-    try {
-      const saved = localStorage.getItem('lj_bolsa_reservas');
-      if (saved) return JSON.parse(saved);
-    } catch (_) {}
-    return [];
-  });
+  const [cartInitialMode, setCartInitialMode] = useState('reserva');
 
-  const toggleBolsa = (producto) => {
-    setBolsaReservas(prev => {
-      const existe = prev.some(item => item.id === producto.id);
-      const updated = existe
-        ? prev.filter(item => item.id !== producto.id)
-        : [...prev, producto];
-      try {
-        localStorage.setItem('lj_bolsa_reservas', JSON.stringify(updated));
-      } catch (_) {}
-      return updated;
-    });
-  };
-
-  const removeFromBolsa = (productoId) => {
-    setBolsaReservas(prev => {
-      const updated = prev.filter(item => item.id !== productoId);
-      try {
-        localStorage.setItem('lj_bolsa_reservas', JSON.stringify(updated));
-      } catch (_) {}
-      return updated;
-    });
-  };
-
-  const clearBolsa = () => {
-    setBolsaReservas([]);
-    try {
-      localStorage.removeItem('lj_bolsa_reservas');
-    } catch (_) {}
+  const apartarDirecto = (prod) => {
+    addToCart(prod);
+    setCartInitialMode('reserva');
+    setShowCartModal(true);
   };
 
   // Cerrar dropdown al hacer click fuera
@@ -256,13 +223,16 @@ export default function App() {
           </div>
         </div>
 
-        {/* Sección de autenticación, perfil y acceso a la bolsa */}
+        {/* Sección de autenticación, perfil y acceso al carrito */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-          {bolsaReservas.length > 0 && (
+          {carrito.length > 0 && (
             <button
               type="button"
               className="secondary"
-              onClick={() => setShowMultiModal(true)}
+              onClick={() => {
+                setCartInitialMode('reserva');
+                setShowCartModal(true);
+              }}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -270,10 +240,11 @@ export default function App() {
                 padding: '8px 14px',
                 borderColor: 'var(--color-cyan)',
                 color: 'var(--color-cyan)',
-                background: 'rgba(0, 210, 238, 0.08)'
+                background: 'rgba(0, 210, 238, 0.08)',
+                cursor: 'pointer'
               }}
             >
-              <span>🛒</span> Bolsa ({bolsaReservas.length})
+              <span>🛒</span> Carrito ({carrito.reduce((a, b) => a + (b.cantidad || 1), 0)})
             </button>
           )}
 
@@ -355,10 +326,13 @@ export default function App() {
             </button>
             <button
               className="nav-bar-btn"
-              onClick={() => setShowCartModal(true)}
-              title="Carrito de compras y solicitud de cotizaciones"
+              onClick={() => {
+                setCartInitialMode('reserva');
+                setShowCartModal(true);
+              }}
+              title="Carrito de compras, reservas y cotizaciones"
             >
-              <span>🛒</span> Carrito / Cotizar {carrito.length > 0 && `(${carrito.reduce((a, b) => a + b.cantidad, 0)})`}
+              <span>🛒</span> Carrito {carrito.length > 0 && `(${carrito.reduce((a, b) => a + (b.cantidad || 1), 0)})`}
             </button>
             {usuario && (
               <>
@@ -534,13 +508,13 @@ export default function App() {
             cargando={loading}
             error={error}
             onRecargar={load}
-            onReservarProducto={prod => setProductoReserva(prod)}
-            bolsa={bolsaReservas}
-            onToggleBolsa={toggleBolsa}
-            onAbrirBolsa={() => setShowMultiModal(true)}
+            carrito={carrito}
             onAddToCart={addToCart}
-            cartCount={carrito.reduce((a, b) => a + b.cantidad, 0)}
-            onAbrirCarrito={() => setShowCartModal(true)}
+            onApartarDirecto={apartarDirecto}
+            onAbrirCarrito={() => {
+              setCartInitialMode('reserva');
+              setShowCartModal(true);
+            }}
             onAvisarStock={prod => setProductoWaitlist(prod)}
           />
         </div>
@@ -657,19 +631,6 @@ export default function App() {
         onClose={() => setProductoReserva(null)}
       />
 
-      <MultiReservationModal
-        isOpen={showMultiModal}
-        items={bolsaReservas}
-        onClose={() => setShowMultiModal(false)}
-        onRemoveItem={removeFromBolsa}
-        onClearBag={clearBolsa}
-        usuarioActual={usuario}
-        onReservaExitosa={() => {
-          load();
-          setMsg('¡Reserva múltiple confirmada con éxito!');
-        }}
-      />
-
       <OrderTrackingModal
         isOpen={showTrackingModal}
         onClose={() => setShowTrackingModal(false)}
@@ -681,23 +642,11 @@ export default function App() {
         cart={carrito}
         setCart={setCarrito}
         onClearCart={clearCart}
-        onProcederReserva={(items) => {
-          // HU-02: Conservar las cantidades de cada producto al pasar del carrito a la reserva múltiple
-          const prods = [];
-          items.forEach(it => {
-            const pOrig = productos.find(p => p.id === it.id) || it;
-            const cant = Number(it.cantidad) || 1;
-            for (let i = 0; i < cant; i++) {
-              prods.push({
-                ...pOrig,
-                precio: Number(pOrig.precio || it.precio),
-                itemUid: `${pOrig.id}_${i}_${Date.now()}`
-              });
-            }
-          });
-          setBolsaReservas(prods);
-          setShowCartModal(false);
-          setShowMultiModal(true);
+        usuarioActual={usuario}
+        initialMode={cartInitialMode}
+        onReservaExitosa={() => {
+          load();
+          setMsg('¡Reserva confirmada con éxito desde el carrito!');
         }}
       />
 

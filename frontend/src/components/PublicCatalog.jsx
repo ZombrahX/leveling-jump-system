@@ -1,16 +1,15 @@
-import { useMemo, useState } from 'react';
+import { useState, useMemo } from 'react';
 import { reservaPoliticaService } from '../services/reservaPoliticaService';
 
-const categories = ['MODEL_KITS', 'FIGURAS', 'ACCESORIOS', 'HERRAMIENTAS', 'OTROS'];
-
-function availability(product) {
-  const count = product.stockDisponible ?? product.unidadesDisponibles ?? product.disponibles;
-  if (typeof count === 'number') {
-    return count > 0 ? `En stock (${count} unidades)` : 'Agotado';
+function formatDisponibilidad(producto) {
+  if (typeof producto.disponibles === 'number') {
+    if (producto.disponibles === 0) return 'Agotado (0 disp.)';
+    if (producto.disponibles === 1) return '¡Última unidad!';
+    return `${producto.disponibles} disponibles`;
   }
-  if (typeof count === 'string' && count.trim() !== '' && !Number.isNaN(Number(count))) {
-    const n = Number(count);
-    return n > 0 ? `En stock (${n} unidades)` : 'Agotado';
+  if (producto.stockActual !== undefined) {
+    if (producto.stockActual <= 0) return 'Agotado';
+    return `${producto.stockActual} en stock`;
   }
   return 'En stock (Por verificar)';
 }
@@ -20,19 +19,18 @@ export default function PublicCatalog({
   cargando,
   error,
   onRecargar,
-  onReservarProducto,
-  bolsa = [],
-  onToggleBolsa,
-  onAbrirBolsa,
+  carrito = [],
   onAddToCart,
-  cartCount = 0,
+  onApartarDirecto,
   onAbrirCarrito,
   onAvisarStock
 }) {
   const [busqueda, setBusqueda] = useState('');
   const [categoria, setCategoria] = useState('');
 
-  const bolsaIds = useMemo(() => new Set(bolsa.map(b => b.id)), [bolsa]);
+  const cartCount = useMemo(() => {
+    return carrito.reduce((acc, curr) => acc + (curr.cantidad || 1), 0);
+  }, [carrito]);
 
   const visibles = useMemo(() => productos.filter(p => {
     const text = `${p.nombre || ''} ${p.marca || ''} ${p.serie || ''}`.toLowerCase();
@@ -46,24 +44,7 @@ export default function PublicCatalog({
           <h2>Catálogo de productos</h2>
           <p className="muted">Explora el catálogo disponible de Leveling Jump con disponibilidad de stock en tiempo real.</p>
         </div>
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-          {bolsa.length > 0 && (
-            <button
-              type="button"
-              className="primary"
-              onClick={onAbrirBolsa}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                background: 'var(--color-cyan)',
-                color: '#080B0F',
-                boxShadow: '0 0 12px var(--color-cyan-glow)'
-              }}
-            >
-              <span>🔖</span> Ver Bolsa ({bolsa.length})
-            </button>
-          )}
+        <div>
           <button className="secondary" type="button" onClick={onRecargar}>Actualizar lista</button>
         </div>
       </div>
@@ -73,49 +54,55 @@ export default function PublicCatalog({
           value={busqueda}
           onChange={e => setBusqueda(e.target.value)}
           placeholder="Buscar por nombre, marca o serie…"
-          aria-label="Buscar productos"
         />
-        <select value={categoria} onChange={e => setCategoria(e.target.value)} aria-label="Filtrar por categoría">
+        <select value={categoria} onChange={e => setCategoria(e.target.value)}>
           <option value="">Todas las categorías</option>
-          {categories.map(c => (
-            <option key={c} value={c}>{c.replaceAll('_', ' ')}</option>
-          ))}
+          <option value="GUNPLA">Gunpla</option>
+          <option value="HERRAMIENTAS">Herramientas</option>
+          <option value="PINTURAS">Pinturas</option>
+          <option value="ACCESORIOS">Accesorios</option>
+          <option value="OTROS">Otros</option>
         </select>
       </div>
 
-      {cargando && <p>Cargando catálogo en vivo…</p>}
+      {cargando && <p className="muted">Cargando catálogo…</p>}
       {error && <div className="alert err">{error}</div>}
-      {!cargando && !error && visibles.length === 0 && (
-        <div className="empty-state">
-          <strong>No se encontraron productos.</strong>
-          <span>Prueba buscando con otro término o seleccionando otra categoría.</span>
-        </div>
-      )}
 
-      <div className="product-grid">
+      <div className="catalog-grid">
         {visibles.map(p => {
-          const avail = availability(p);
-          const isAvail = avail.toLowerCase().includes('en stock');
-          const isAgotado = !isAvail || (p.stockDisponible !== undefined && p.stockDisponible <= 0);
-          const estaEnBolsa = bolsaIds.has(p.id);
+          const disp = formatDisponibilidad(p);
+          const isAgotado = (typeof p.disponibles === 'number' && p.disponibles === 0) || (p.stockActual !== undefined && p.stockActual <= 0);
+          const cartItem = carrito.find(item => item.id === p.id);
 
           return (
-            <article className="product-card" key={p.id}>
-              {p.imagenUrl ? (
-                <img src={p.imagenUrl} alt={p.nombre} onError={e => { e.currentTarget.style.display = 'none'; }} />
-              ) : (
-                <div className="product-placeholder">LEVELING JUMP</div>
-              )}
-              <div className="product-info">
-                <span className="product-category">{(p.categoria || 'OTROS').replaceAll('_', ' ')}</span>
+            <article key={p.id} className="catalog-card">
+              <div className="catalog-card-image">
+                {p.imagenUrl ? (
+                  <img
+                    src={p.imagenUrl}
+                    alt={p.nombre}
+                    loading="lazy"
+                    onError={e => { e.currentTarget.style.display = 'none'; }}
+                  />
+                ) : (
+                  <span className="placeholder-image">Sin imagen</span>
+                )}
+                <span className={`badge-disponibilidad ${isAgotado ? 'agotado' : 'disponible'}`}>
+                  {disp}
+                </span>
+              </div>
+              <div className="catalog-card-body">
+                <span className="catalog-card-brand">{p.marca || 'Marca'} · {p.serie || 'Serie'}</span>
                 <h3>{p.nombre}</h3>
-                <p>{p.marca || 'Marca no especificada'}{p.serie ? ` · ${p.serie}` : ''}</p>
-                <div className="product-bottom">
-                  <strong>{p.precio != null ? `S/ ${Number(p.precio).toFixed(2)}` : 'Precio por confirmar'}</strong>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', gap: '6px' }}>
-                    <span className={`availability ${isAvail ? 'available' : ''}`}>
-                      {avail}
-                    </span>
+                {p.descripcion && <p className="catalog-card-desc">{p.descripcion}</p>}
+                
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px' }}>
+                  <span className="catalog-card-price">
+                    {p.precio !== undefined ? `S/ ${Number(p.precio).toFixed(2)}` : 'Consultar'}
+                  </span>
+                  
+                  {/* Etiqueta de política de reserva */}
+                  <div>
                     {(() => {
                       const pol = reservaPoliticaService.obtenerPoliticaProducto(p.id);
                       if (pol.modo === 'PAGO_TOTAL') {
@@ -129,15 +116,15 @@ export default function PublicCatalog({
                   </div>
                 </div>
 
-                {/* P08: Deshabilitar botones de reserva si el producto está agotado */}
-                <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+                {/* Botones de acción unificados (HU-02) */}
+                <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
                   {isAgotado ? (
                     <button
                       type="button"
                       className="primary"
                       style={{
                         flex: 1,
-                        padding: '8px 10px',
+                        padding: '9px 12px',
                         fontSize: '12.5px',
                         background: '#D97706',
                         color: '#FFFFFF',
@@ -149,55 +136,42 @@ export default function PublicCatalog({
                       🔔 Avisarme (Waitlist)
                     </button>
                   ) : (
-                    <button
-                      type="button"
-                      className="primary"
-                      style={{
-                        flex: 1,
-                        padding: '8px 10px',
-                        fontSize: '12.5px',
-                        cursor: 'pointer'
-                      }}
-                      onClick={() => onReservarProducto && onReservarProducto(p)}
-                      title="Apartar este kit"
-                    >
-                      🔖 Reservar
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        className="primary"
+                        style={{
+                          flex: 1,
+                          padding: '9px 12px',
+                          fontSize: '12.5px',
+                          cursor: 'pointer',
+                          background: cartItem ? 'var(--color-cyan)' : undefined,
+                          color: cartItem ? '#080B0F' : undefined,
+                          fontWeight: cartItem ? 'bold' : 'normal',
+                          boxShadow: cartItem ? '0 0 10px var(--color-cyan-glow)' : undefined
+                        }}
+                        onClick={() => onAddToCart && onAddToCart(p)}
+                        title="Añadir al carrito de compras"
+                      >
+                        {cartItem ? `🛒 En Carrito (${cartItem.cantidad}) +` : '🛒 Al Carrito'}
+                      </button>
+
+                      <button
+                        type="button"
+                        className="secondary"
+                        style={{
+                          padding: '9px 12px',
+                          fontSize: '12.5px',
+                          whiteSpace: 'nowrap',
+                          cursor: 'pointer'
+                        }}
+                        onClick={() => onApartarDirecto && onApartarDirecto(p)}
+                        title="Apartar inmediatamente este kit con adelanto"
+                      >
+                        🔖 Apartar
+                      </button>
+                    </>
                   )}
-                  <button
-                    type="button"
-                    className="secondary"
-                    disabled={isAgotado}
-                    style={{
-                      padding: '8px 12px',
-                      fontSize: '12.5px',
-                      whiteSpace: 'nowrap',
-                      opacity: isAgotado ? 0.4 : 1,
-                      cursor: isAgotado ? 'not-allowed' : 'pointer',
-                      borderColor: estaEnBolsa ? 'var(--color-cyan)' : undefined,
-                      color: estaEnBolsa ? 'var(--color-cyan)' : undefined,
-                      background: estaEnBolsa ? 'rgba(0, 210, 238, 0.12)' : undefined,
-                      fontWeight: estaEnBolsa ? 'bold' : 'normal'
-                    }}
-                    onClick={() => !isAgotado && onToggleBolsa && onToggleBolsa(p)}
-                    title={isAgotado ? 'Producto agotado. No se puede añadir a la bolsa.' : (estaEnBolsa ? 'Quitar de la bolsa de reserva' : 'Añadir a la bolsa de reserva múltiple')}
-                  >
-                    {estaEnBolsa ? '✓ En Bolsa' : '➕ Bolsa'}
-                  </button>
-                  <button
-                    type="button"
-                    className="secondary"
-                    style={{
-                      padding: '8px 12px',
-                      fontSize: '12.5px',
-                      whiteSpace: 'nowrap',
-                      cursor: 'pointer'
-                    }}
-                    onClick={() => onAddToCart && onAddToCart(p)}
-                    title="Añadir al carrito comercial para cotización o compra"
-                  >
-                    🛒
-                  </button>
                 </div>
               </div>
             </article>
@@ -205,17 +179,17 @@ export default function PublicCatalog({
         })}
       </div>
 
-      {/* Botón flotante para acceder a la bolsa en cualquier punto de la pantalla */}
-      {bolsa.length > 0 && (
+      {/* Botón flotante para acceder al carrito desde cualquier punto */}
+      {cartCount > 0 && (
         <div
-          onClick={onAbrirBolsa}
+          onClick={onAbrirCarrito}
           style={{
             position: 'fixed',
             bottom: '24px',
             right: '24px',
             background: 'var(--color-cyan)',
             color: '#080B0F',
-            padding: '12px 20px',
+            padding: '12px 22px',
             borderRadius: '30px',
             fontWeight: 'bold',
             fontSize: '14px',
@@ -230,7 +204,7 @@ export default function PublicCatalog({
           }}
         >
           <span style={{ fontSize: '18px' }}>🛒</span>
-          <span>Bolsa de Reserva ({bolsa.length} {bolsa.length === 1 ? 'kit' : 'kits'})</span>
+          <span>Ver Carrito ({cartCount} {cartCount === 1 ? 'kit' : 'kits'})</span>
         </div>
       )}
     </section>

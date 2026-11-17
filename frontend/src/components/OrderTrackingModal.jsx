@@ -203,7 +203,7 @@ export default function OrderTrackingModal({ isOpen, onClose, codigoInicial = ''
                   {pedido.producto?.nombre}
                 </h4>
                 <div style={{ fontSize: '12px', color: '#64748B' }}>
-                  SKU: {pedido.producto?.codigo} | Total: <strong>S/ {pedido.montoTotal.toFixed(2)}</strong>
+                  SKU: {pedido.producto?.codigo || 'N/A'} | Total: <strong>S/ {Number(pedido.montoTotal !== undefined ? pedido.montoTotal : (pedido.producto?.precio || 0)).toFixed(2)}</strong>
                 </div>
                 {pedido.serieAsignada && (
                   <div style={{ fontSize: '11px', color: '#00D2EE', fontWeight: 700, marginTop: '2px' }}>
@@ -249,15 +249,15 @@ export default function OrderTrackingModal({ isOpen, onClose, codigoInicial = ''
             {/* Desglose de Pago */}
             <div style={{ background: '#0D1117', padding: '12px 16px', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
-                <span style={{ color: '#94A3B8', fontSize: '11px', display: 'block' }}>ESTADO FINANCIERO:</span>
-                <span style={{ color: pedido.saldoPendiente === 0 ? '#10B981' : '#F59E0B', fontWeight: 800, fontSize: '13px' }}>
-                  {pedido.estadoPago}
+                <span style={{ color: '#94A3B8', fontSize: '11px', display: 'block' }}>ESTADO DE PAGO:</span>
+                <span style={{ color: Number(pedido.saldoPendiente || 0) === 0 ? '#10B981' : '#F59E0B', fontWeight: 800, fontSize: '13px' }}>
+                  {pedido.estadoPago || pedido.estadoReserva || 'PENDIENTE'}
                 </span>
               </div>
               <div style={{ textAlign: 'right' }}>
                 <span style={{ color: '#94A3B8', fontSize: '11px', display: 'block' }}>SALDO POR LIQUIDAR:</span>
-                <span style={{ color: pedido.saldoPendiente === 0 ? '#10B981' : '#00D2EE', fontWeight: 800, fontSize: '16px' }}>
-                  S/ {pedido.saldoPendiente.toFixed(2)}
+                <span style={{ color: Number(pedido.saldoPendiente || 0) === 0 ? '#10B981' : '#00D2EE', fontWeight: 800, fontSize: '16px' }}>
+                  S/ {Number(pedido.saldoPendiente || 0).toFixed(2)}
                 </span>
               </div>
             </div>

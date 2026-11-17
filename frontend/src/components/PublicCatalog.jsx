@@ -1,15 +1,16 @@
-import { useState, useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { reservaPoliticaService } from '../services/reservaPoliticaService';
 
-function formatDisponibilidad(producto) {
-  if (typeof producto.disponibles === 'number') {
-    if (producto.disponibles === 0) return 'Agotado (0 disp.)';
-    if (producto.disponibles === 1) return '¡Última unidad!';
-    return `${producto.disponibles} disponibles`;
+const categories = ['MODEL_KITS', 'FIGURAS', 'ACCESORIOS', 'HERRAMIENTAS', 'OTROS'];
+
+function availability(product) {
+  const count = product.stockDisponible ?? product.unidadesDisponibles ?? product.disponibles;
+  if (typeof count === 'number') {
+    return count > 0 ? `En stock (${count} unidades)` : 'Agotado';
   }
-  if (producto.stockActual !== undefined) {
-    if (producto.stockActual <= 0) return 'Agotado';
-    return `${producto.stockActual} en stock`;
+  if (typeof count === 'string' && count.trim() !== '' && !Number.isNaN(Number(count))) {
+    const n = Number(count);
+    return n > 0 ? `En stock (${n} unidades)` : 'Agotado';
   }
   return 'En stock (Por verificar)';
 }
@@ -54,55 +55,52 @@ export default function PublicCatalog({
           value={busqueda}
           onChange={e => setBusqueda(e.target.value)}
           placeholder="Buscar por nombre, marca o serie…"
+          aria-label="Buscar productos"
         />
-        <select value={categoria} onChange={e => setCategoria(e.target.value)}>
+        <select value={categoria} onChange={e => setCategoria(e.target.value)} aria-label="Filtrar por categoría">
           <option value="">Todas las categorías</option>
-          <option value="GUNPLA">Gunpla</option>
-          <option value="HERRAMIENTAS">Herramientas</option>
-          <option value="PINTURAS">Pinturas</option>
-          <option value="ACCESORIOS">Accesorios</option>
-          <option value="OTROS">Otros</option>
+          {categories.map(c => (
+            <option key={c} value={c}>{c.replaceAll('_', ' ')}</option>
+          ))}
         </select>
       </div>
 
-      {cargando && <p className="muted">Cargando catálogo…</p>}
+      {cargando && <p>Cargando catálogo en vivo…</p>}
       {error && <div className="alert err">{error}</div>}
+      {!cargando && !error && visibles.length === 0 && (
+        <div className="empty-state">
+          <strong>No se encontraron productos.</strong>
+          <span>Prueba buscando con otro término o seleccionando otra categoría.</span>
+        </div>
+      )}
 
-      <div className="catalog-grid">
+      <div className="product-grid">
         {visibles.map(p => {
-          const disp = formatDisponibilidad(p);
-          const isAgotado = (typeof p.disponibles === 'number' && p.disponibles === 0) || (p.stockActual !== undefined && p.stockActual <= 0);
+          const avail = availability(p);
+          const isAvail = avail.toLowerCase().includes('en stock');
+          const isAgotado = !isAvail || (p.stockDisponible !== undefined && p.stockDisponible <= 0) || (p.disponibles !== undefined && p.disponibles <= 0);
           const cartItem = carrito.find(item => item.id === p.id);
 
           return (
-            <article key={p.id} className="catalog-card">
-              <div className="catalog-card-image">
-                {p.imagenUrl ? (
-                  <img
-                    src={p.imagenUrl}
-                    alt={p.nombre}
-                    loading="lazy"
-                    onError={e => { e.currentTarget.style.display = 'none'; }}
-                  />
-                ) : (
-                  <span className="placeholder-image">Sin imagen</span>
-                )}
-                <span className={`badge-disponibilidad ${isAgotado ? 'agotado' : 'disponible'}`}>
-                  {disp}
-                </span>
-              </div>
-              <div className="catalog-card-body">
-                <span className="catalog-card-brand">{p.marca || 'Marca'} · {p.serie || 'Serie'}</span>
+            <article className="product-card" key={p.id}>
+              {p.imagenUrl ? (
+                <img src={p.imagenUrl} alt={p.nombre} onError={e => { e.currentTarget.style.display = 'none'; }} />
+              ) : (
+                <div className="product-placeholder">LEVELING JUMP</div>
+              )}
+              <div className="product-info">
+                <span className="product-category">{(p.categoria || 'OTROS').replaceAll('_', ' ')}</span>
                 <h3>{p.nombre}</h3>
-                {p.descripcion && <p className="catalog-card-desc">{p.descripcion}</p>}
-                
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px' }}>
-                  <span className="catalog-card-price">
-                    {p.precio !== undefined ? `S/ ${Number(p.precio).toFixed(2)}` : 'Consultar'}
-                  </span>
-                  
+                <p>{p.marca || 'Marca no especificada'}{p.serie ? ` · ${p.serie}` : ''}</p>
+
+                <div className="product-bottom">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: '8px' }}>
+                    <span className={`availability ${isAgotado ? 'sold-out' : 'available'}`}>{avail}</span>
+                    <strong>S/ {Number(p.precio).toFixed(2)}</strong>
+                  </div>
+
                   {/* Etiqueta de política de reserva */}
-                  <div>
+                  <div style={{ marginBottom: '10px' }}>
                     {(() => {
                       const pol = reservaPoliticaService.obtenerPoliticaProducto(p.id);
                       if (pol.modo === 'PAGO_TOTAL') {
@@ -114,64 +112,63 @@ export default function PublicCatalog({
                       return <span style={{ fontSize: '11px', color: '#059669', fontWeight: 'bold' }}>🔖 Mín. {pol.p1 || 20}%</span>;
                     })()}
                   </div>
-                </div>
 
-                {/* Botones de acción unificados (HU-02) */}
-                <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
-                  {isAgotado ? (
-                    <button
-                      type="button"
-                      className="primary"
-                      style={{
-                        flex: 1,
-                        padding: '9px 12px',
-                        fontSize: '12.5px',
-                        background: '#D97706',
-                        color: '#FFFFFF',
-                        cursor: 'pointer'
-                      }}
-                      onClick={() => onAvisarStock && onAvisarStock(p)}
-                      title="Anotarme en la lista de espera para cuando llegue stock"
-                    >
-                      🔔 Avisarme (Waitlist)
-                    </button>
-                  ) : (
-                    <>
+                  {/* Botones de acción unificados */}
+                  <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
+                    {isAgotado ? (
                       <button
                         type="button"
                         className="primary"
                         style={{
-                          flex: 1,
-                          padding: '9px 12px',
+                          width: '100%',
+                          padding: '8px 10px',
                           fontSize: '12.5px',
-                          cursor: 'pointer',
-                          background: cartItem ? 'var(--color-cyan)' : undefined,
-                          color: cartItem ? '#080B0F' : undefined,
-                          fontWeight: cartItem ? 'bold' : 'normal',
-                          boxShadow: cartItem ? '0 0 10px var(--color-cyan-glow)' : undefined
-                        }}
-                        onClick={() => onAddToCart && onAddToCart(p)}
-                        title="Añadir al carrito de compras"
-                      >
-                        {cartItem ? `🛒 En Carrito (${cartItem.cantidad}) +` : '🛒 Al Carrito'}
-                      </button>
-
-                      <button
-                        type="button"
-                        className="secondary"
-                        style={{
-                          padding: '9px 12px',
-                          fontSize: '12.5px',
-                          whiteSpace: 'nowrap',
+                          background: '#D97706',
+                          color: '#FFFFFF',
                           cursor: 'pointer'
                         }}
-                        onClick={() => onApartarDirecto && onApartarDirecto(p)}
-                        title="Apartar inmediatamente este kit con adelanto"
+                        onClick={() => onAvisarStock && onAvisarStock(p)}
+                        title="Anotarme en la lista de espera para cuando llegue stock"
                       >
-                        🔖 Apartar
+                        🔔 Avisarme (Waitlist)
                       </button>
-                    </>
-                  )}
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          className="primary"
+                          style={{
+                            flex: 1,
+                            padding: '8px 10px',
+                            fontSize: '12.5px',
+                            cursor: 'pointer',
+                            background: cartItem ? 'var(--color-cyan)' : undefined,
+                            color: cartItem ? '#080B0F' : undefined,
+                            fontWeight: cartItem ? 'bold' : 'normal',
+                            boxShadow: cartItem ? '0 0 10px var(--color-cyan-glow)' : undefined
+                          }}
+                          onClick={() => onAddToCart && onAddToCart(p)}
+                          title="Añadir al carrito de compras"
+                        >
+                          {cartItem ? `🛒 En Carrito (${cartItem.cantidad}) +` : '🛒 Al Carrito'}
+                        </button>
+                        <button
+                          type="button"
+                          className="secondary"
+                          style={{
+                            padding: '8px 12px',
+                            fontSize: '12.5px',
+                            whiteSpace: 'nowrap',
+                            cursor: 'pointer'
+                          }}
+                          onClick={() => onApartarDirecto && onApartarDirecto(p)}
+                          title="Apartar inmediatamente este kit con adelanto"
+                        >
+                          🔖 Apartar
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
             </article>
@@ -189,7 +186,7 @@ export default function PublicCatalog({
             right: '24px',
             background: 'var(--color-cyan)',
             color: '#080B0F',
-            padding: '12px 22px',
+            padding: '12px 20px',
             borderRadius: '30px',
             fontWeight: 'bold',
             fontSize: '14px',

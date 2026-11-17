@@ -635,7 +635,11 @@ const consultarSeguimientoPublico = async (req, res) => {
       fechaEstimadaEntrega: reserva.fechaEstimadaEntrega,
       guiaCourier: reserva.guiaCourier,
       fechaReserva: reserva.fechaReserva,
-      producto: reserva.producto
+      producto: reserva.producto,
+      montoTotal: Number(reserva.montoTotal || 0),
+      montoAdelanto: Number(reserva.montoAdelanto || 0),
+      saldoPendiente: Number(reserva.saldoPendiente || 0),
+      estadoPago: reserva.estadoPago
     });
   } catch (error) {
     console.error('[ReservaController.consultarSeguimientoPublico] Error:', error);

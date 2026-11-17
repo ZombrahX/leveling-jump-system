@@ -144,7 +144,7 @@ export default function PublicCatalog({
                         cursor: 'pointer'
                       }}
                       onClick={() => onAvisarStock && onAvisarStock(p)}
-                      title="Anotarme en la lista de espera para cuando llegue stock (HU-08)"
+                      title="Anotarme en la lista de espera para cuando llegue stock"
                     >
                       🔔 Avisarme (Waitlist)
                     </button>

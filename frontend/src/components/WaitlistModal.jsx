@@ -56,7 +56,7 @@ export default function WaitlistModal({ isOpen, onClose, producto, usuarioActual
                 LISTA DE ESPERA / RESTOCK
               </h3>
               <small style={{ color: '#8B949E', fontSize: '11px', display: 'block' }}>
-                HU-08 — Alerta de reposición comercial
+                Alerta de reposición comercial y aviso de arribo
               </small>
             </div>
           </div>

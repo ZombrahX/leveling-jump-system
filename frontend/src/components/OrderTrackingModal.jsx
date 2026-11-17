@@ -73,7 +73,7 @@ export default function OrderTrackingModal({ isOpen, onClose, codigoInicial = ''
             <span style={{ fontSize: '26px' }}>📍</span>
             <div>
               <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#0F172A' }}>
-                Seguimiento de Pedido & Entrega (HU-10)
+                Seguimiento de Pedido & Entrega
               </h3>
               <small style={{ color: '#64748B' }}>
                 Consulta en tiempo real el avance de tu reserva y modalidad de retiro

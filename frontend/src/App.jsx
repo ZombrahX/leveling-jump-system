@@ -349,14 +349,14 @@ export default function App() {
             <button
               className="nav-bar-btn"
               onClick={() => setShowTrackingModal(true)}
-              title="HU-10: Rastrear avance y entrega de tu pedido con tu código RES"
+              title="Rastrear avance y entrega de tu pedido con tu código de reserva"
             >
-              <span>📍</span> Rastrear Pedido (HU-10)
+              <span>📍</span> Rastrear Pedido
             </button>
             <button
               className="nav-bar-btn"
               onClick={() => setShowCartModal(true)}
-              title="HU-02 / HU-07: Carrito de compras y solicitud de cotizaciones formales"
+              title="Carrito de compras y solicitud de cotizaciones"
             >
               <span>🛒</span> Carrito / Cotizar {carrito.length > 0 && `(${carrito.reduce((a, b) => a + b.cantidad, 0)})`}
             </button>

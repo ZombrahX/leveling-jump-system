@@ -112,7 +112,7 @@ export default function CartAndQuotationModal({ isOpen, onClose, cart = [], setC
                 CARRITO Y COTIZACIONES
               </h3>
               <small style={{ color: '#8B949E', fontSize: '11px', display: 'block' }}>
-                HU-02 / HU-07 — Gestión comercial formal
+                Gestión comercial y emisión proforma
               </small>
             </div>
           </div>
@@ -260,14 +260,14 @@ export default function CartAndQuotationModal({ isOpen, onClose, cart = [], setC
                       boxShadow: '0 0 12px var(--color-cyan-glow)'
                     }}
                   >
-                    <span>🔖</span> Confirmar Selección como Reserva Múltiple (HU-06)
+                    <span>🔖</span> Confirmar Selección como Reserva
                   </button>
                 </div>
 
-                {/* Formulario de Cotización Formal (HU-07) */}
+                {/* Formulario de Cotización Formal */}
                 <form onSubmit={handleGenerarCotizacion} style={{ borderTop: '1px solid #30363D', paddingTop: '14px' }}>
                   <h4 style={{ margin: '0 0 12px', fontSize: '14px', color: '#F0F6FC', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span>📋</span> Solicitar Cotización Formal Oficial (HU-07)
+                    <span>📋</span> Solicitar Cotización Formal
                   </h4>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '10px', marginBottom: '10px' }}>
                     <label style={{ margin: 0 }}>

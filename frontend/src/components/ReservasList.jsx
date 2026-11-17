@@ -117,7 +117,7 @@ export default function ReservasList({ token }) {
     <section className="card" style={{ maxWidth: '1200px', margin: '0 auto' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
         <div>
-          <h2>Control de Reservas, Adelantos y Saldos (HU-06 / HU-09)</h2>
+          <h2>Control de Reservas, Adelantos y Saldos</h2>
           <p className="muted">
             Auditoría de pedidos apartados, abonos parciales, cálculo automático de saldos y entregas.
           </p>
@@ -246,7 +246,7 @@ export default function ReservasList({ token }) {
                             fontSize: '11px',
                             cursor: 'pointer'
                           }}
-                          title="Registrar abono de saldo (HU-09)"
+                          title="Registrar abono de saldo"
                         >
                           💰 Abonar
                         </button>
@@ -277,7 +277,7 @@ export default function ReservasList({ token }) {
       </div>
 
       {/* ============================================================== */}
-      {/* MODAL HU-09: REGISTRAR ADELANTO / ABONO DE SALDO */}
+      {/* MODAL: REGISTRAR ADELANTO / ABONO DE SALDO */}
       {/* ============================================================== */}
       {reservaParaAbonar && (
         <div style={{
@@ -308,7 +308,7 @@ export default function ReservasList({ token }) {
                 <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 800, color: '#0F172A' }}>
                   Registrar Abono — {reservaParaAbonar.codigoSeguimiento}
                 </h3>
-                <small style={{ color: '#64748B' }}>HU-09: Gestión de adelantos y saldos</small>
+                <small style={{ color: '#64748B' }}>Gestión de cobranza y abonos</small>
               </div>
               <button
                 type="button"

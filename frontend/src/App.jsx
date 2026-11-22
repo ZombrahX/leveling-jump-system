@@ -13,6 +13,7 @@ import VentasPOS from './components/VentasPOS';
 import OrderTrackingModal from './components/OrderTrackingModal';
 import CartAndQuotationModal from './components/CartAndQuotationModal';
 import CotizacionesList from './components/CotizacionesList';
+import InteresesList from './components/InteresesList';
 import WaitlistModal from './components/WaitlistModal';
 import { obtenerProductos, crearProducto, actualizarProducto } from './services/productService';
 import { registrarRecepcion } from './services/recepcionService';
@@ -40,8 +41,27 @@ export default function App() {
   const esStaff = usuario && (usuario.rol === 'SUPERADMIN' || usuario.rol === 'ADMIN');
   const esSuperadmin = usuario?.rol === 'SUPERADMIN';
 
-  // Por defecto, vista catálogo para clientes y visitantes
-  const [vista, setVista] = useState(() => (esStaff ? 'productos' : 'catalogo'));
+  // Persistencia de la vista activa al refrescar (Ctrl+R), validando permisos del rol actual
+  const [vista, setVista] = useState(() => {
+    try {
+      const guardada = localStorage.getItem('lj_vista_activa');
+      if (guardada) {
+        const vistasStaff = ['productos', 'recepcion', 'ventas-pos', 'reservas', 'cotizaciones', 'intereses'];
+        const vistasAuth = ['mis-reservas', 'perfil'];
+        if (guardada === 'staff' && esSuperadmin) return 'staff';
+        if (vistasStaff.includes(guardada) && esStaff) return guardada;
+        if (vistasAuth.includes(guardada) && usuario) return guardada;
+        if (guardada === 'catalogo') return 'catalogo';
+      }
+    } catch (_) {}
+    return esStaff ? 'productos' : 'catalogo';
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('lj_vista_activa', vista);
+    } catch (_) {}
+  }, [vista]);
   const [productos, setProductos] = useState([]);
   const [edit, setEdit] = useState(null);
   const [busqueda, setBusqueda] = useState('');
@@ -358,7 +378,7 @@ export default function App() {
             <div className="nav-dropdown-wrapper">
               <button
                 type="button"
-                className={`nav-bar-btn has-dropdown ${vista === 'catalogo' || vista === 'productos' ? 'active' : ''}`}
+                className={`nav-bar-btn has-dropdown ${vista === 'catalogo' || vista === 'productos' || vista === 'intereses' ? 'active' : ''}`}
                 onClick={() => toggleDropdown('catalogo')}
               >
                 <span>📦</span> Catálogo & Tienda
@@ -386,6 +406,16 @@ export default function App() {
                       <small>Catálogo maestro, edición, precios y márgenes</small>
                     </div>
                   </div>
+                  <div
+                    className={`nav-dropdown-item ${vista === 'intereses' ? 'active' : ''}`}
+                    onClick={() => chooseView('intereses')}
+                  >
+                    <span className="item-icon">🔔</span>
+                    <div>
+                      <strong>Lista de Espera y Demanda</strong>
+                      <small>Clientes interesados al reponer stock de lotes</small>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -394,7 +424,7 @@ export default function App() {
             <div className="nav-dropdown-wrapper">
               <button
                 type="button"
-                className={`nav-bar-btn has-dropdown ${vista === 'recepcion' ? 'active' : ''}`}
+                className={`nav-bar-btn has-dropdown ${vista === 'recepcion' || vista === 'intereses' ? 'active' : ''}`}
                 onClick={() => toggleDropdown('almacen')}
               >
                 <span>📥</span> Almacén & Lotes
@@ -410,6 +440,16 @@ export default function App() {
                     <div>
                       <strong>Recepción de Lotes</strong>
                       <small>Ingreso de embarques, fletes e inventario unitario</small>
+                    </div>
+                  </div>
+                  <div
+                    className={`nav-dropdown-item ${vista === 'intereses' ? 'active' : ''}`}
+                    onClick={() => chooseView('intereses')}
+                  >
+                    <span className="item-icon">🔔</span>
+                    <div>
+                      <strong>Clientes en Lista de Espera</strong>
+                      <small>Notificar interesados cuando ingresa nuevo stock</small>
                     </div>
                   </div>
                 </div>
@@ -621,6 +661,12 @@ export default function App() {
       {vista === 'cotizaciones' && esStaff && (
         <div className="single-view">
           <CotizacionesList token={token} />
+        </div>
+      )}
+
+      {vista === 'intereses' && esStaff && (
+        <div className="single-view">
+          <InteresesList token={token} />
         </div>
       )}
 

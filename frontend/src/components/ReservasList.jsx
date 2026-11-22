@@ -10,6 +10,20 @@ const MEDIOS_PAGO = [
   { id: 'OTRO', label: 'Otro' }
 ];
 
+const MODALIDADES_ENTREGA = [
+  { id: 'RETIRO_FERIA', label: '🎪 Retiro en Feria (Sábados)' },
+  { id: 'RETIRO_TIENDA', label: '🏪 Retiro en Almacén / Tienda' },
+  { id: 'ENVIO_LIMA', label: '🛵 Delivery Lima Metropolitana' },
+  { id: 'ENVIO_PROVINCIA', label: '📦 Envío a Provincia (Shalom / Olva)' }
+];
+
+const ESTADOS_ENTREGA = [
+  { id: 'PENDIENTE_PREPARACION', label: '📦 En preparación en almacén' },
+  { id: 'LISTO_PARA_ENTREGA', label: '✅ Listo para recojo / entrega' },
+  { id: 'EN_TRANSITO', label: '🚚 En tránsito / Despachado' },
+  { id: 'ENTREGADO', label: '🎉 Entregado al cliente' }
+];
+
 export default function ReservasList({ token }) {
   const [reservas, setReservas] = useState([]);
   const [cargando, setCargando] = useState(false);
@@ -18,7 +32,7 @@ export default function ReservasList({ token }) {
   const [error, setError] = useState('');
   const [msg, setMsg] = useState('');
 
-  // Modal HU-09: Registrar Adelanto / Abono
+  // Modal: Registrar Adelanto / Abono
   const [reservaParaAbonar, setReservaParaAbonar] = useState(null);
   const [montoAbono, setMontoAbono] = useState('');
   const [medioPagoAbono, setMedioPagoAbono] = useState('YAPE');
@@ -27,6 +41,16 @@ export default function ReservasList({ token }) {
   const [guardandoAbono, setGuardandoAbono] = useState(false);
   const [errorModalAbono, setErrorModalAbono] = useState('');
   const [historialPagosModal, setHistorialPagosModal] = useState([]);
+
+  // Modal: Gestionar Modalidad y Estado de Entrega
+  const [reservaParaEntrega, setReservaParaEntrega] = useState(null);
+  const [modalidadEntregaInput, setModalidadEntregaInput] = useState('RETIRO_FERIA');
+  const [estadoEntregaInput, setEstadoEntregaInput] = useState('PENDIENTE_PREPARACION');
+  const [fechaEstimadaInput, setFechaEstimadaInput] = useState('');
+  const [guiaCourierInput, setGuiaCourierInput] = useState('');
+  const [direccionEntregaInput, setDireccionEntregaInput] = useState('');
+  const [guardandoEntrega, setGuardandoEntrega] = useState(false);
+  const [errorModalEntrega, setErrorModalEntrega] = useState('');
 
   const cargar = async () => {
     setCargando(true);
@@ -86,7 +110,6 @@ export default function ReservasList({ token }) {
     }
 
     const saldoMax = parseFloat(reservaParaAbonar.saldoPendiente);
-    // HU-09 Escenario 2: Validación en cliente además de backend
     if (montoNum > saldoMax) {
       setErrorModalAbono(
         `El importe ingresado (S/ ${montoNum.toFixed(2)}) supera el saldo pendiente. El importe máximo que puede registrarse es S/ ${saldoMax.toFixed(2)}.`
@@ -113,13 +136,55 @@ export default function ReservasList({ token }) {
     }
   };
 
+  const abrirModalEntrega = (reserva) => {
+    setReservaParaEntrega(reserva);
+    setModalidadEntregaInput(reserva.modalidadEntrega || 'RETIRO_FERIA');
+    setEstadoEntregaInput(reserva.estadoEntrega || 'PENDIENTE_PREPARACION');
+    setFechaEstimadaInput(
+      reserva.fechaEstimadaEntrega
+        ? new Date(reserva.fechaEstimadaEntrega).toISOString().split('T')[0]
+        : ''
+    );
+    setGuiaCourierInput(reserva.guiaCourier || '');
+    setDireccionEntregaInput(reserva.direccionEntrega || '');
+    setErrorModalEntrega('');
+  };
+
+  const handleGuardarEntrega = async (e) => {
+    e.preventDefault();
+    setErrorModalEntrega('');
+
+    try {
+      setGuardandoEntrega(true);
+      const res = await reservaService.actualizarEntrega(
+        reservaParaEntrega.id,
+        {
+          modalidadEntrega: modalidadEntregaInput,
+          estadoEntrega: estadoEntregaInput,
+          fechaEstimadaEntrega: fechaEstimadaInput || null,
+          guiaCourier: guiaCourierInput.trim() || null,
+          direccionEntrega: direccionEntregaInput.trim() || null
+        },
+        token
+      );
+
+      setMsg(res.mensaje || `Entrega del pedido ${reservaParaEntrega.codigoSeguimiento} actualizada.`);
+      setReservaParaEntrega(null);
+      await cargar();
+    } catch (err) {
+      setErrorModalEntrega(err.message || 'No se pudo actualizar la información de entrega.');
+    } finally {
+      setGuardandoEntrega(false);
+    }
+  };
+
   return (
-    <section className="card" style={{ maxWidth: '1200px', margin: '0 auto' }}>
+    <section className="card" style={{ maxWidth: '1240px', margin: '0 auto' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
         <div>
-          <h2>Control de Reservas, Adelantos y Saldos</h2>
+          <h2>Control de Reservas, Adelantos y Entregas</h2>
           <p className="muted">
-            Auditoría de pedidos apartados, abonos parciales, cálculo automático de saldos y entregas.
+            Auditoría de pedidos apartados, abonos parciales, cálculo automático de saldos y seguimiento de despacho.
           </p>
         </div>
         <button className="secondary" onClick={cargar} disabled={cargando}>
@@ -157,6 +222,7 @@ export default function ReservasList({ token }) {
               <th style={{ padding: '8px' }}>Adelanto</th>
               <th style={{ padding: '8px' }}>Saldo</th>
               <th style={{ padding: '8px' }}>Estado Pago</th>
+              <th style={{ padding: '8px' }}>Modalidad / Entrega</th>
               <th style={{ padding: '8px' }}>Estado Reserva</th>
               <th style={{ padding: '8px', textAlign: 'right' }}>Acciones</th>
             </tr>
@@ -166,6 +232,8 @@ export default function ReservasList({ token }) {
               const saldoNum = Number(r.saldoPendiente);
               const cancelada = r.estadoReserva === 'CANCELADA';
               const entregada = r.estadoReserva === 'ENTREGADA';
+              const modObj = MODALIDADES_ENTREGA.find(m => m.id === r.modalidadEntrega);
+              const estEntObj = ESTADOS_ENTREGA.find(e => e.id === r.estadoEntrega);
 
               return (
                 <tr key={r.id} style={{ borderBottom: '1px solid #21262D' }}>
@@ -201,7 +269,7 @@ export default function ReservasList({ token }) {
                   <td style={{ padding: '10px 8px', color: saldoNum > 0 ? 'var(--color-gold)' : '#10B981', fontWeight: 'bold' }}>
                     S/ {saldoNum.toFixed(2)}
                   </td>
-                  {/* HU-09: Estado de Pago */}
+                  {/* Estado de Pago */}
                   <td style={{ padding: '10px 8px' }}>
                     <span style={{
                       padding: '2px 6px',
@@ -213,6 +281,25 @@ export default function ReservasList({ token }) {
                     }}>
                       {saldoNum === 0 ? 'COMPLETADO' : (Number(r.montoAdelanto) > 0 ? 'PARCIAL' : 'PENDIENTE')}
                     </span>
+                  </td>
+                  {/* Modalidad y Estado de Entrega */}
+                  <td style={{ padding: '10px 8px', fontSize: '11.5px' }}>
+                    <div style={{ fontWeight: 600, color: '#E2E8F0' }}>
+                      {modObj ? modObj.label : (r.modalidadEntrega || '🎪 Retiro en Feria')}
+                    </div>
+                    <small style={{ color: r.estadoEntrega === 'ENTREGADO' ? '#10B981' : 'var(--color-cyan)', display: 'block' }}>
+                      {estEntObj ? estEntObj.label : (r.estadoEntrega || 'En preparación')}
+                    </small>
+                    {r.fechaEstimadaEntrega && (
+                      <small style={{ color: '#8B949E', display: 'block' }}>
+                        📅 Est: {new Date(r.fechaEstimadaEntrega).toLocaleDateString('es-PE')}
+                      </small>
+                    )}
+                    {r.guiaCourier && (
+                      <small style={{ color: '#F59E0B', display: 'block', fontFamily: 'monospace' }}>
+                        Guía: {r.guiaCourier}
+                      </small>
+                    )}
                   </td>
                   {/* Estado Reserva */}
                   <td style={{ padding: '10px 8px' }}>
@@ -230,8 +317,7 @@ export default function ReservasList({ token }) {
                   </td>
                   {/* Acciones */}
                   <td style={{ padding: '10px 8px', textAlign: 'right' }}>
-                    <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', alignItems: 'center' }}>
-                      {/* Botón HU-09: Abonar */}
+                    <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', alignItems: 'center', flexWrap: 'wrap' }}>
                       {!cancelada && !entregada && (
                         <button
                           type="button"
@@ -249,6 +335,26 @@ export default function ReservasList({ token }) {
                           title="Registrar abono de saldo"
                         >
                           💰 Abonar
+                        </button>
+                      )}
+
+                      {!cancelada && (
+                        <button
+                          type="button"
+                          onClick={() => abrirModalEntrega(r)}
+                          style={{
+                            padding: '4px 8px',
+                            borderRadius: '4px',
+                            border: '1px solid var(--color-cyan)',
+                            background: 'rgba(0, 210, 238, 0.12)',
+                            color: 'var(--color-cyan)',
+                            fontWeight: 700,
+                            fontSize: '11px',
+                            cursor: 'pointer'
+                          }}
+                          title="Actualizar modalidad, estado o fecha estimada de entrega"
+                        >
+                          🚚 Entrega
                         </button>
                       )}
 
@@ -323,15 +429,15 @@ export default function ReservasList({ token }) {
             <div style={{ background: '#F8FAFC', padding: '14px', borderRadius: '10px', border: '1px solid #E2E8F0', marginBottom: '16px', fontSize: '13px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
                 <span style={{ color: '#64748B' }}>Producto:</span>
-                <strong>{reservaParaAbonar.producto?.nombre}</strong>
+                <strong style={{ color: '#0F172A' }}>{reservaParaAbonar.producto?.nombre}</strong>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
                 <span style={{ color: '#64748B' }}>Cliente:</span>
-                <span>{reservaParaAbonar.nombreCliente}</span>
+                <span style={{ color: '#0F172A' }}>{reservaParaAbonar.nombreCliente}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
                 <span style={{ color: '#64748B' }}>Total Acordado:</span>
-                <span>S/ {Number(reservaParaAbonar.montoTotal).toFixed(2)}</span>
+                <span style={{ color: '#0F172A' }}>S/ {Number(reservaParaAbonar.montoTotal).toFixed(2)}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
                 <span style={{ color: '#64748B' }}>Adelanto Acumulado:</span>
@@ -454,7 +560,7 @@ export default function ReservasList({ token }) {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '130px', overflowY: 'auto' }}>
                   {historialPagosModal.map(p => (
                     <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', background: '#F8FAFC', padding: '6px 10px', borderRadius: '6px', fontSize: '11px', border: '1px solid #E2E8F0' }}>
-                      <div>
+                      <div style={{ color: '#0F172A' }}>
                         <strong>S/ {Number(p.monto).toFixed(2)}</strong> via {p.medioPago}
                         {p.referenciaOperacion && <span style={{ color: '#64748B' }}> ({p.referenciaOperacion})</span>}
                       </div>
@@ -466,6 +572,124 @@ export default function ReservasList({ token }) {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* MODAL: GESTIONAR MODALIDAD Y ESTADO DE ENTREGA */}
+      {/* ============================================================== */}
+      {reservaParaEntrega && (
+        <div className="modal-overlay" onClick={() => setReservaParaEntrega(null)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '520px' }}>
+            <div className="modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span style={{ fontSize: '24px' }}>🚚</span>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.2rem', color: 'var(--color-cyan)' }}>
+                    GESTIONAR ENTREGA — {reservaParaEntrega.codigoSeguimiento}
+                  </h3>
+                  <small style={{ color: '#8B949E', fontSize: '11px' }}>
+                    {reservaParaEntrega.producto?.nombre} · Cliente: {reservaParaEntrega.nombreCliente}
+                  </small>
+                </div>
+              </div>
+              <button className="modal-close-btn" onClick={() => setReservaParaEntrega(null)}>&times;</button>
+            </div>
+
+            {errorModalEntrega && (
+              <div className="alert err" style={{ marginBottom: '14px' }}>
+                ⚠️ {errorModalEntrega}
+              </div>
+            )}
+
+            <form onSubmit={handleGuardarEntrega}>
+              <label style={{ display: 'block', marginBottom: '12px' }}>
+                Modalidad de Entrega Acordada *
+                <select
+                  value={modalidadEntregaInput}
+                  onChange={e => setModalidadEntregaInput(e.target.value)}
+                  style={{ marginTop: '4px', width: '100%' }}
+                >
+                  {MODALIDADES_ENTREGA.map(m => (
+                    <option key={m.id} value={m.id}>{m.label}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label style={{ display: 'block', marginBottom: '12px' }}>
+                Estado Actual del Envío / Entrega *
+                <select
+                  value={estadoEntregaInput}
+                  onChange={e => setEstadoEntregaInput(e.target.value)}
+                  style={{ marginTop: '4px', width: '100%' }}
+                >
+                  {ESTADOS_ENTREGA.map(e => (
+                    <option key={e.id} value={e.id}>{e.label}</option>
+                  ))}
+                </select>
+              </label>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '12px' }}>
+                <label style={{ margin: 0 }}>
+                  Fecha Estimada de Entrega
+                  <input
+                    type="date"
+                    value={fechaEstimadaInput}
+                    onChange={e => setFechaEstimadaInput(e.target.value)}
+                    style={{ marginTop: '4px', width: '100%' }}
+                  />
+                </label>
+
+                <label style={{ margin: 0 }}>
+                  Nro. Guía Courier (Opcional)
+                  <input
+                    type="text"
+                    value={guiaCourierInput}
+                    onChange={e => setGuiaCourierInput(e.target.value)}
+                    placeholder="Ej: SHALOM-998877"
+                    style={{ marginTop: '4px', width: '100%' }}
+                  />
+                </label>
+              </div>
+
+              <label style={{ display: 'block', marginBottom: '16px' }}>
+                Dirección / Punto de Entrega (Opcional)
+                <input
+                  type="text"
+                  value={direccionEntregaInput}
+                  onChange={e => setDireccionEntregaInput(e.target.value)}
+                  placeholder="Ej: C.C. Arenales Stand Leveling Jump / Agencia Shalom Trujillo"
+                  style={{ marginTop: '4px', width: '100%' }}
+                />
+              </label>
+
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => setReservaParaEntrega(null)}
+                  disabled={guardandoEntrega}
+                  style={{ flex: 1, padding: '10px' }}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="primary"
+                  disabled={guardandoEntrega}
+                  style={{
+                    flex: 1,
+                    padding: '10px',
+                    fontWeight: 'bold',
+                    background: 'var(--color-cyan)',
+                    color: '#080B0F'
+                  }}
+                >
+                  {guardandoEntrega ? 'Guardando...' : '💾 Guardar Cambios de Entrega'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

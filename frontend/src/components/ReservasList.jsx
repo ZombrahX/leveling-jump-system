@@ -179,7 +179,7 @@ export default function ReservasList({ token }) {
   };
 
   return (
-    <section className="card" style={{ maxWidth: '1240px', margin: '0 auto' }}>
+    <section className="card" style={{ width: '100%', margin: '0 auto' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
         <div>
           <h2>Control de Reservas, Adelantos y Entregas</h2>
@@ -283,20 +283,20 @@ export default function ReservasList({ token }) {
                     </span>
                   </td>
                   {/* Modalidad y Estado de Entrega */}
-                  <td style={{ padding: '10px 8px', fontSize: '11.5px' }}>
-                    <div style={{ fontWeight: 600, color: '#E2E8F0' }}>
+                  <td style={{ padding: '10px 8px', fontSize: '12px' }}>
+                    <div style={{ fontWeight: 700, color: '#0F172A' }}>
                       {modObj ? modObj.label : (r.modalidadEntrega || '🎪 Retiro en Feria')}
                     </div>
-                    <small style={{ color: r.estadoEntrega === 'ENTREGADO' ? '#10B981' : 'var(--color-cyan)', display: 'block' }}>
+                    <small style={{ color: r.estadoEntrega === 'ENTREGADO' ? '#059669' : '#0284C7', fontWeight: 600, display: 'block' }}>
                       {estEntObj ? estEntObj.label : (r.estadoEntrega || 'En preparación')}
                     </small>
                     {r.fechaEstimadaEntrega && (
-                      <small style={{ color: '#8B949E', display: 'block' }}>
+                      <small style={{ color: '#475569', display: 'block' }}>
                         📅 Est: {new Date(r.fechaEstimadaEntrega).toLocaleDateString('es-PE')}
                       </small>
                     )}
                     {r.guiaCourier && (
-                      <small style={{ color: '#F59E0B', display: 'block', fontFamily: 'monospace' }}>
+                      <small style={{ color: '#D97706', fontWeight: 700, display: 'block', fontFamily: 'monospace' }}>
                         Guía: {r.guiaCourier}
                       </small>
                     )}

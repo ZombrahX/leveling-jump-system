@@ -46,7 +46,8 @@ body {
 }
 
 main {
-  max-width: 1440px;
+  max-width: 1680px;
+  width: 100%;
   margin: 0 auto;
   padding: 0 24px 40px;
 }
@@ -276,7 +277,8 @@ main {
 }
 
 .single-view {
-  max-width: 1180px;
+  max-width: 100%;
+  width: 100%;
   margin: 0 auto;
 }
 

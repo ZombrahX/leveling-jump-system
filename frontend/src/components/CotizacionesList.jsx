@@ -79,7 +79,7 @@ export default function CotizacionesList({ token }) {
   };
 
   return (
-    <section className="card" style={{ maxWidth: '1240px', margin: '0 auto' }}>
+    <section className="card" style={{ width: '100%', margin: '0 auto' }}>
       {/* Cabecera */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
         <div>
@@ -166,32 +166,32 @@ export default function CotizacionesList({ token }) {
               const cantItems = (c.items || []).reduce((acc, it) => acc + (it.cantidad || 1), 0);
 
               return (
-                <tr key={c.id} style={{ borderBottom: '1px solid #21262D' }}>
-                  <td style={{ padding: '10px 8px', fontWeight: 'bold', color: 'var(--color-cyan)', fontFamily: 'monospace' }}>
+                <tr key={c.id} style={{ borderBottom: '1px solid #E2E8F0' }}>
+                  <td style={{ padding: '10px 8px', fontWeight: 'bold', color: '#0284C7', fontFamily: 'monospace' }}>
                     {c.codigoCotizacion}
                   </td>
                   <td style={{ padding: '10px 8px' }}>
-                    <div style={{ fontWeight: '600', color: '#FFFFFF' }}>{c.nombreCliente}</div>
-                    <small style={{ color: '#8B949E' }}>📱 {c.telefonoCliente}</small>
+                    <div style={{ fontWeight: '700', color: '#0F172A' }}>{c.nombreCliente}</div>
+                    <small style={{ color: '#475569' }}>📱 {c.telefonoCliente}</small>
                     {c.emailCliente && (
                       <small style={{ color: '#64748B', display: 'block' }}>✉️ {c.emailCliente}</small>
                     )}
                   </td>
                   <td style={{ padding: '10px 8px' }}>
-                    <div style={{ fontSize: '12.5px', color: '#E2E8F0', maxWidth: '280px' }}>
+                    <div style={{ fontSize: '12.5px', color: '#1E293B', fontWeight: 500 }}>
                       {(c.items || []).map(it => `${it.cantidad}x ${it.nombreProducto}`).join(', ')}
                     </div>
-                    <small style={{ color: '#8B949E', fontSize: '11px' }}>
+                    <small style={{ color: '#64748B', fontSize: '11px' }}>
                       ({cantItems} {cantItems === 1 ? 'artículo' : 'artículos'})
                     </small>
                   </td>
-                  <td style={{ padding: '10px 8px', fontWeight: 'bold', color: '#10B981', fontFamily: 'monospace', fontSize: '13.5px' }}>
+                  <td style={{ padding: '10px 8px', fontWeight: 'bold', color: '#059669', fontFamily: 'monospace', fontSize: '13.5px' }}>
                     S/ {parseFloat(c.total || 0).toFixed(2)}
                   </td>
-                  <td style={{ padding: '10px 8px', color: '#8B949E', fontSize: '12px' }}>
+                  <td style={{ padding: '10px 8px', color: '#475569', fontSize: '12px' }}>
                     {new Date(c.fechaEmision).toLocaleDateString('es-PE')}
                   </td>
-                  <td style={{ padding: '10px 8px', fontSize: '12px', color: esVigente ? '#E2E8F0' : '#EF4444' }}>
+                  <td style={{ padding: '10px 8px', fontSize: '12px', fontWeight: 600, color: esVigente ? '#0F172A' : '#DC2626' }}>
                     {new Date(c.fechaVencimiento).toLocaleDateString('es-PE')}
                   </td>
                   <td style={{ padding: '10px 8px' }}>

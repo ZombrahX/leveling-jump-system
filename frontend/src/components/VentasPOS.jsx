@@ -232,7 +232,7 @@ export default function VentasPOS({ productos = [], onVentaCompletada, token, us
   };
 
   return (
-    <div className="ventas-pos-container" style={{ maxWidth: '1400px', margin: '0 auto', padding: '10px' }}>
+    <div className="ventas-pos-container" style={{ width: '100%', margin: '0 auto' }}>
       {/* Header con Tabs */}
       <div style={{
         display: 'flex',

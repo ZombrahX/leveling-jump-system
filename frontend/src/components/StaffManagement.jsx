@@ -209,7 +209,7 @@ export default function StaffManagement() {
   };
 
   return (
-    <section className="card" style={{ maxWidth: '1000px', margin: '0 auto' }}>
+    <section className="card" style={{ width: '100%', margin: '0 auto' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
         <div>
           <h2>Gestión de Staff y Jerarquía de Accesos</h2>

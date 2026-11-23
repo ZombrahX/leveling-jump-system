@@ -105,7 +105,7 @@ export default function InteresesList({ token }) {
   }, [resumenDemanda, totalRegistros]);
 
   return (
-    <section className="card" style={{ maxWidth: '1240px', margin: '0 auto' }}>
+    <section className="card" style={{ width: '100%', margin: '0 auto' }}>
       {/* Cabecera */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
         <div>

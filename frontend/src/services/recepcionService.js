@@ -1,7 +1,6 @@
 import { API_BASE_URL } from './apiConfig';
 
 const API_URL = `${API_BASE_URL}/api/lotes`;
-const API_FALLBACK = `${API_BASE_URL}/api/recepciones`;
 
 async function responseData(response) {
   const data = await response.json().catch(() => ({}));
@@ -12,21 +11,12 @@ async function responseData(response) {
 }
 
 export async function registrarRecepcion(payload) {
-  try {
-    const response = await fetch(API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    return await responseData(response);
-  } catch (err) {
-    const responseFallback = await fetch(API_FALLBACK, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    return responseData(responseFallback);
-  }
+  const response = await fetch(API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  return responseData(response);
 }
 
 export async function obtenerHistorialLotes() {

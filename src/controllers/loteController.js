@@ -2,9 +2,9 @@ const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
 /**
- * PTLJ-26, PTLJ-27, PTLJ-28 & HU-12: Registrar la recepción de un lote con sus unidades de inventario
+ * PTLJ-26, PTLJ-27, PTLJ-28 & HU-12: Registrar la recepción de un lote con uno o múltiples productos
  * Diferencia entre fecha física de llegada (fechaLlegada) y fecha inmutable de registro (fechaCreacion).
- * Permite registrar documento de referencia (factura / guía de remisión).
+ * Permite registrar documento de referencia (factura / guía de remisión) y múltiples líneas de productos en el mismo embarque.
  */
 const registrarLoteConUnidades = async (req, res) => {
   try {
@@ -18,23 +18,9 @@ const registrarLoteConUnidades = async (req, res) => {
       productoId,
       cantidad,
       costoUnitario,
-      costoFleteTotal
+      costoFleteTotal,
+      items
     } = req.body;
-
-    const cant = Number(cantidad);
-    // PTLJ-28: Validación de cantidad obligatoria
-    if (!cant || cant <= 0) {
-      return res.status(400).json({ 
-        error: "La cantidad es obligatoria y debe ser mayor a 0." 
-      });
-    }
-
-    const targetProductoId = Number(idProducto || productoId);
-    if (!targetProductoId) {
-      return res.status(400).json({ 
-        error: "El producto a recibir (idProducto) es obligatorio." 
-      });
-    }
 
     if (!proveedor || !proveedor.trim()) {
       return res.status(400).json({
@@ -42,12 +28,66 @@ const registrarLoteConUnidades = async (req, res) => {
       });
     }
 
-    const codLoteFinal = codigoLote && codigoLote.trim() 
-      ? codigoLote.trim() 
+    // Normalizar formato multi-producto (items[]) o formato clásico de 1 producto (retrocompatible)
+    let rawItems = [];
+    if (Array.isArray(items) && items.length > 0) {
+      rawItems = items;
+    } else if (idProducto !== undefined || productoId !== undefined || cantidad !== undefined) {
+      rawItems = [
+        {
+          idProducto: idProducto || productoId,
+          cantidad,
+          costoUnitario
+        }
+      ];
+    }
+
+    if (rawItems.length === 0) {
+      return res.status(400).json({
+        error: "Debe incluir al menos un producto a recibir en el lote."
+      });
+    }
+
+    const itemsValidados = [];
+    for (let idx = 0; idx < rawItems.length; idx++) {
+      const it = rawItems[idx] || {};
+      const prodId = Number(it.idProducto || it.productoId);
+      if (!prodId || !Number.isInteger(prodId) || prodId <= 0) {
+        return res.status(400).json({
+          error: `El producto en la fila #${idx + 1} es obligatorio.`
+        });
+      }
+
+      const cant = Number(it.cantidad);
+      if (!cant || !Number.isInteger(cant) || cant <= 0) {
+        return res.status(400).json({
+          error: `La cantidad en la fila #${idx + 1} es obligatoria y debe ser un número entero mayor a 0.`
+        });
+      }
+
+      const rawCosto = it.costoUnitario;
+      let costoNum = null;
+      if (rawCosto !== undefined && rawCosto !== null && String(rawCosto).trim() !== '') {
+        costoNum = Number(rawCosto);
+        if (isNaN(costoNum) || costoNum < 0) {
+          return res.status(400).json({
+            error: `El costo unitario en la fila #${idx + 1} no es válido.`
+          });
+        }
+      }
+
+      itemsValidados.push({
+        idProducto: prodId,
+        cantidad: cant,
+        costoUnitario: costoNum
+      });
+    }
+
+    const codLoteFinal = codigoLote && codigoLote.trim()
+      ? codigoLote.trim()
       : `LOT-${new Date().getFullYear()}-${Date.now().toString().slice(-4)}`;
 
     // HU-12 / P04: Fecha física de arribo vs fecha de registro del sistema
-    // Si viene como YYYY-MM-DD o string, fijar a mediodía UTC (T12:00:00Z) para evitar desfases de zona horaria (UTC-5)
     let fechaLlegadaFinal = new Date();
     if (fechaLlegada) {
       if (typeof fechaLlegada === 'string' && fechaLlegada.includes('T')) {
@@ -60,9 +100,8 @@ const registrarLoteConUnidades = async (req, res) => {
       }
     }
 
-    // Transacción de Prisma para asegurar integridad ACID
+    // Transacción ACID para registrar la cabecera del lote y todas las unidades de los distintos productos
     const resultado = await prisma.$transaction(async (tx) => {
-      // PTLJ-26 & HU-12: Registrar la recepción del lote
       const nuevoLote = await tx.loteIngreso.create({
         data: {
           codigoLote: codLoteFinal,
@@ -72,22 +111,25 @@ const registrarLoteConUnidades = async (req, res) => {
           costoFleteTotal: costoFleteTotal ? Number(costoFleteTotal) : null,
           observaciones: observaciones ? observaciones.trim() : null,
           estadoLote: 'RECIBIDO'
-          // fechaCreacion se genera automáticamente con @default(now())
         }
       });
 
-      // PTLJ-27: Generar automáticamente las unidades de inventario por lote
       const unidadesAcrear = [];
-      for (let i = 1; i <= cant; i++) {
-        const codigoSerie = `${codLoteFinal}-ITEM-${i.toString().padStart(4, '0')}`;
+      let correlativoSerie = 1;
 
-        unidadesAcrear.push({
-          idProducto: targetProductoId,
-          idLote: nuevoLote.id,
-          codigoSerie,
-          costoUnitario: costoUnitario ? Number(costoUnitario) : null,
-          estadoStock: 'DISPONIBLE'
-        });
+      for (const item of itemsValidados) {
+        for (let i = 1; i <= item.cantidad; i++) {
+          const codigoSerie = `${codLoteFinal}-ITEM-${correlativoSerie.toString().padStart(4, '0')}`;
+          correlativoSerie++;
+
+          unidadesAcrear.push({
+            idProducto: item.idProducto,
+            idLote: nuevoLote.id,
+            codigoSerie,
+            costoUnitario: item.costoUnitario,
+            estadoStock: 'DISPONIBLE'
+          });
+        }
       }
 
       await tx.inventarioUnidad.createMany({
@@ -96,7 +138,8 @@ const registrarLoteConUnidades = async (req, res) => {
 
       return {
         lote: nuevoLote,
-        unidadesGeneradas: cant
+        totalProductosDistintos: itemsValidados.length,
+        unidadesGeneradas: unidadesAcrear.length
       };
     });
 
@@ -118,7 +161,7 @@ const registrarLoteConUnidades = async (req, res) => {
 };
 
 /**
- * HU-12: Obtener historial de lotes recibidos
+ * HU-12: Obtener historial de lotes recibidos incluyendo el resumen de productos por lote
  */
 const obtenerLotes = async (req, res) => {
   try {
@@ -126,6 +169,19 @@ const obtenerLotes = async (req, res) => {
       include: {
         _count: {
           select: { unidadesInventario: true }
+        },
+        unidadesInventario: {
+          select: {
+            idProducto: true,
+            costoUnitario: true,
+            producto: {
+              select: {
+                id: true,
+                codigo: true,
+                nombre: true
+              }
+            }
+          }
         }
       },
       orderBy: { fechaCreacion: 'desc' }
@@ -133,10 +189,28 @@ const obtenerLotes = async (req, res) => {
 
     return res.status(200).json({
       total: lotes.length,
-      lotes: lotes.map(l => ({
-        ...l,
-        totalUnidades: l._count ? l._count.unidadesInventario : 0
-      }))
+      lotes: lotes.map(l => {
+        const conteoPorProd = new Map();
+        (l.unidadesInventario || []).forEach(u => {
+          const pid = u.idProducto;
+          if (!conteoPorProd.has(pid)) {
+            conteoPorProd.set(pid, {
+              idProducto: pid,
+              codigo: u.producto?.codigo || '',
+              nombre: u.producto?.nombre || `Producto #${pid}`,
+              cantidad: 0
+            });
+          }
+          conteoPorProd.get(pid).cantidad += 1;
+        });
+
+        const { unidadesInventario, _count, ...restoLote } = l;
+        return {
+          ...restoLote,
+          totalUnidades: _count ? _count.unidadesInventario : 0,
+          productosResumen: Array.from(conteoPorProd.values())
+        };
+      })
     });
   } catch (error) {
     console.error("Error al obtener historial de lotes:", error);

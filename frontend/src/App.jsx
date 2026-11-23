@@ -378,7 +378,7 @@ export default function App() {
             <div className="nav-dropdown-wrapper">
               <button
                 type="button"
-                className={`nav-bar-btn has-dropdown ${vista === 'catalogo' || vista === 'productos' || vista === 'intereses' ? 'active' : ''}`}
+                className={`nav-bar-btn has-dropdown ${vista === 'catalogo' || vista === 'productos' ? 'active' : ''}`}
                 onClick={() => toggleDropdown('catalogo')}
               >
                 <span>📦</span> Catálogo & Tienda
@@ -404,16 +404,6 @@ export default function App() {
                     <div>
                       <strong>Gestión de Productos</strong>
                       <small>Catálogo maestro, edición, precios y márgenes</small>
-                    </div>
-                  </div>
-                  <div
-                    className={`nav-dropdown-item ${vista === 'intereses' ? 'active' : ''}`}
-                    onClick={() => chooseView('intereses')}
-                  >
-                    <span className="item-icon">🔔</span>
-                    <div>
-                      <strong>Lista de Espera y Demanda</strong>
-                      <small>Clientes interesados al reponer stock de lotes</small>
                     </div>
                   </div>
                 </div>
@@ -448,7 +438,7 @@ export default function App() {
                   >
                     <span className="item-icon">🔔</span>
                     <div>
-                      <strong>Clientes en Lista de Espera</strong>
+                      <strong>Lista de Espera y Demanda</strong>
                       <small>Notificar interesados cuando ingresa nuevo stock</small>
                     </div>
                   </div>

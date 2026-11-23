@@ -576,6 +576,9 @@ const consultarSeguimientoPublico = async (req, res) => {
     }
 
     const codigoLimpio = codigo.trim().toUpperCase();
+    if (!/^[A-Z0-9-]{4,35}$/.test(codigoLimpio)) {
+      return res.status(400).json({ error: 'Formato de código de seguimiento inválido.' });
+    }
 
     const reserva = await prisma.reserva.findUnique({
       where: { codigoSeguimiento: codigoLimpio },

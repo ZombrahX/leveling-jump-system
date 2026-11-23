@@ -5,6 +5,7 @@ import ReceptionForm from './components/ReceptionForm';
 import PublicCatalog from './components/PublicCatalog';
 import ReservasList from './components/ReservasList';
 import CustomerReservations from './components/CustomerReservations';
+import CustomerQuotations from './components/CustomerQuotations';
 import UserProfile from './components/UserProfile';
 import StaffManagement from './components/StaffManagement';
 import LoginModal from './components/LoginModal';
@@ -47,7 +48,7 @@ export default function App() {
       const guardada = localStorage.getItem('lj_vista_activa');
       if (guardada) {
         const vistasStaff = ['productos', 'recepcion', 'ventas-pos', 'reservas', 'cotizaciones', 'intereses'];
-        const vistasAuth = ['mis-reservas', 'perfil'];
+        const vistasAuth = ['mis-reservas', 'mis-cotizaciones', 'perfil'];
         if (guardada === 'staff' && esSuperadmin) return 'staff';
         if (vistasStaff.includes(guardada) && esStaff) return guardada;
         if (vistasAuth.includes(guardada) && usuario) return guardada;
@@ -306,6 +307,15 @@ export default function App() {
                 </button>
                 <button
                   type="button"
+                  className={`secondary ${vista === 'mis-cotizaciones' ? 'active' : ''}`}
+                  onClick={() => chooseView('mis-cotizaciones')}
+                  style={{ padding: '6px 10px', fontSize: '12px' }}
+                  title="Mis cotizaciones generadas"
+                >
+                  📋 Mis Cotizaciones
+                </button>
+                <button
+                  type="button"
                   className="secondary"
                   onClick={handleLogout}
                   style={{ padding: '6px 10px', fontSize: '12px' }}
@@ -340,13 +350,6 @@ export default function App() {
             </button>
             <button
               className="nav-bar-btn"
-              onClick={() => setShowTrackingModal(true)}
-              title="Rastrear avance y entrega de tu pedido con tu código de reserva"
-            >
-              <span>📍</span> Rastrear Pedido
-            </button>
-            <button
-              className="nav-bar-btn"
               onClick={() => {
                 setCartInitialMode('reserva');
                 setShowCartModal(true);
@@ -358,10 +361,23 @@ export default function App() {
             {usuario && (
               <>
                 <button
+                  className="nav-bar-btn"
+                  onClick={() => setShowTrackingModal(true)}
+                  title="Rastrear avance y entrega de tu pedido con tu código de reserva"
+                >
+                  <span>📍</span> Rastrear Pedido
+                </button>
+                <button
                   className={`nav-bar-btn ${vista === 'mis-reservas' ? 'active' : ''}`}
                   onClick={() => chooseView('mis-reservas')}
                 >
                   <span>🔖</span> Mis Reservas
+                </button>
+                <button
+                  className={`nav-bar-btn ${vista === 'mis-cotizaciones' ? 'active' : ''}`}
+                  onClick={() => chooseView('mis-cotizaciones')}
+                >
+                  <span>📋</span> Mis Cotizaciones
                 </button>
                 <button
                   className={`nav-bar-btn ${vista === 'perfil' ? 'active' : ''}`}
@@ -570,6 +586,16 @@ export default function App() {
         </div>
       )}
 
+      {vista === 'mis-cotizaciones' && usuario && (
+        <div className="single-view">
+          <CustomerQuotations
+            token={token}
+            usuarioActual={usuario}
+            onExplorarCatalogo={() => chooseView('catalogo')}
+          />
+        </div>
+      )}
+
       {vista === 'perfil' && usuario && (
         <div className="single-view">
           <UserProfile
@@ -687,6 +713,7 @@ export default function App() {
       <OrderTrackingModal
         isOpen={showTrackingModal}
         onClose={() => setShowTrackingModal(false)}
+        usuarioActual={usuario}
       />
 
       <CartAndQuotationModal

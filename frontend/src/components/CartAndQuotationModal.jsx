@@ -237,10 +237,11 @@ export default function CartAndQuotationModal({
 
     try {
       setCargando(true);
+      const emailFinal = email ? email.trim() : (usuarioActual?.email || null);
       const payload = {
         nombreCliente: nombre.trim(),
         telefonoCliente: telefono.trim(),
-        emailCliente: email ? email.trim() : null,
+        emailCliente: emailFinal,
         observaciones: observaciones ? observaciones.trim() : '',
         items: cart.map(i => ({ idProducto: i.id, cantidad: i.cantidad || 1 }))
       };
@@ -249,6 +250,14 @@ export default function CartAndQuotationModal({
       setCotizacionGenerada(resp.cotizacion);
       setExito(resp.mensaje || 'Cotización formal emitida exitosamente.');
       setActiveTab('cotizacion_doc');
+
+      // Guardar en caché local vinculada al usuario para visualización inmediata en Mis Cotizaciones
+      try {
+        const prevStr = localStorage.getItem('lj_mis_cotizaciones_cache');
+        const prevArr = prevStr ? JSON.parse(prevStr) : [];
+        const nuevaCot = { ...resp.cotizacion, idUsuario: usuarioActual?.id || null };
+        localStorage.setItem('lj_mis_cotizaciones_cache', JSON.stringify([nuevaCot, ...prevArr].slice(0, 30)));
+      } catch (_) {}
     } catch (err) {
       setError(err.message || 'Error al generar la cotización.');
     } finally {
@@ -321,8 +330,8 @@ export default function CartAndQuotationModal({
           <button className="modal-close-btn" onClick={handleClose}>&times;</button>
         </div>
 
-        {/* Pestañas de navegación superior si no está en vista de éxito */}
-        {!reservasConfirmadas && (
+        {/* Pestañas de navegación superior si hay hoja de cotización emitida */}
+        {!reservasConfirmadas && cotizacionGenerada && (
           <div className="auth-tabs" style={{ marginBottom: '16px' }}>
             <button
               type="button"
@@ -333,20 +342,11 @@ export default function CartAndQuotationModal({
             </button>
             <button
               type="button"
-              className={`auth-tab-btn ${activeTab === 'consultar' ? 'active' : ''}`}
-              onClick={() => setActiveTab('consultar')}
+              className={`auth-tab-btn ${activeTab === 'cotizacion_doc' ? 'active' : ''}`}
+              onClick={() => setActiveTab('cotizacion_doc')}
             >
-              🔍 Consultar Cotización
+              📄 Hoja Oficial ({cotizacionGenerada.codigoCotizacion})
             </button>
-            {cotizacionGenerada && (
-              <button
-                type="button"
-                className={`auth-tab-btn ${activeTab === 'cotizacion_doc' ? 'active' : ''}`}
-                onClick={() => setActiveTab('cotizacion_doc')}
-              >
-                📄 Hoja Oficial ({cotizacionGenerada.codigoCotizacion})
-              </button>
-            )}
           </div>
         )}
 
@@ -807,36 +807,9 @@ export default function CartAndQuotationModal({
               </div>
             )}
           </div>
-        ) : activeTab === 'consultar' ? (
-          /* ============================================================== */
-          /* PESTAÑA 2: CONSULTAR COTIZACIÓN POR CÓDIGO */
-          /* ============================================================== */
-          <div style={{ padding: '6px 0' }}>
-            <p style={{ fontSize: '13px', color: '#C9D1D9', marginBottom: '14px' }}>
-              Ingresa el código correlativo de tu cotización (ej. <code>COT-2026-1234</code>) para revisar su vigencia y detalle de productos.
-            </p>
-            <form onSubmit={handleBuscarCotizacion} style={{ display: 'flex', gap: '8px' }}>
-              <input
-                type="text"
-                required
-                value={codigoBusqueda}
-                onChange={e => setCodigoBusqueda(e.target.value.toUpperCase())}
-                placeholder="COT-2026-XXXX"
-                style={{ flex: 1, textTransform: 'uppercase', fontFamily: 'monospace', fontSize: '14px' }}
-              />
-              <button
-                type="submit"
-                className="primary"
-                disabled={cargando}
-                style={{ whiteSpace: 'nowrap', padding: '0 20px' }}
-              >
-                {cargando ? 'Buscando...' : '🔍 Buscar'}
-              </button>
-            </form>
-          </div>
         ) : activeTab === 'cotizacion_doc' && cotizacionGenerada ? (
           /* ============================================================== */
-          /* PESTAÑA 3: HOJA DE COTIZACIÓN FORMAL (IMPRIMIBLE) */
+          /* PESTAÑA 2: HOJA DE COTIZACIÓN FORMAL (IMPRIMIBLE) */
           /* ============================================================== */
           <div>
             <div

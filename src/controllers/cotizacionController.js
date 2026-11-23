@@ -188,8 +188,13 @@ const obtenerCotizacionPorCodigo = async (req, res) => {
       return res.status(400).json({ error: 'Código de cotización requerido.' });
     }
 
+    const codigoLimpio = codigo.trim().toUpperCase();
+    if (!/^[A-Z0-9-]{4,35}$/.test(codigoLimpio)) {
+      return res.status(400).json({ error: 'Formato de código de cotización inválido.' });
+    }
+
     const cotizacion = await prisma.cotizacion.findUnique({
-      where: { codigoCotizacion: codigo.trim() },
+      where: { codigoCotizacion: codigoLimpio },
       include: {
         items: true
       }
@@ -240,6 +245,62 @@ const obtenerCotizacionPorCodigo = async (req, res) => {
 };
 
 /**
+ * Listar las cotizaciones pertenecientes al usuario autenticado (Cliente / Staff)
+ */
+const obtenerMisCotizaciones = async (req, res) => {
+  try {
+    const idUsuario = req.usuario?.id;
+    if (!idUsuario) {
+      return res.status(401).json({ error: 'Debes iniciar sesión para consultar tus cotizaciones.' });
+    }
+
+    const usuarioDB = await prisma.usuario.findUnique({
+      where: { id: Number(idUsuario) },
+      select: { email: true, nombre: true, telefono: true }
+    });
+
+    const emailUsuario = (usuarioDB?.email || req.usuario?.email || '').trim().toLowerCase();
+    const nombreUsuario = (usuarioDB?.nombre || req.usuario?.nombre || '')
+      .replace(/\s*\((Google|Local)\)/gi, '')
+      .trim();
+    const telUsuario = (usuarioDB?.telefono || '').replace(/\D/g, '');
+
+    const condicionesOR = [];
+    if (emailUsuario) {
+      condicionesOR.push({ emailCliente: { equals: emailUsuario, mode: 'insensitive' } });
+    }
+    if (telUsuario && telUsuario.length >= 7) {
+      condicionesOR.push({ telefonoCliente: { contains: telUsuario } });
+    }
+    if (nombreUsuario) {
+      condicionesOR.push({ nombreCliente: { equals: nombreUsuario, mode: 'insensitive' } });
+    }
+
+    if (condicionesOR.length === 0) {
+      return res.status(200).json({ cotizaciones: [] });
+    }
+
+    const cotizaciones = await prisma.cotizacion.findMany({
+      where: {
+        OR: condicionesOR
+      },
+      orderBy: { fechaEmision: 'desc' },
+      include: {
+        items: true
+      },
+      take: 50
+    });
+
+    return res.status(200).json({ cotizaciones });
+  } catch (error) {
+    console.error('[CotizacionController.obtenerMisCotizaciones] Error:', error);
+    return res.status(500).json({
+      error: sanitizarError(error, 'Error al obtener tus cotizaciones.')
+    });
+  }
+};
+
+/**
  * HU-07: Listar cotizaciones para Staff
  */
 const listarCotizaciones = async (req, res) => {
@@ -264,5 +325,6 @@ const listarCotizaciones = async (req, res) => {
 module.exports = {
   crearCotizacion,
   obtenerCotizacionPorCodigo,
+  obtenerMisCotizaciones,
   listarCotizaciones
 };

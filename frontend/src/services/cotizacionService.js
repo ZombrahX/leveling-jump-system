@@ -21,16 +21,31 @@ export const cotizacionService = {
     return handleResponse(res);
   },
 
-  // Consultar cotización por código correlativo
-  async obtenerPorCodigo(codigo) {
-    const res = await fetch(`${API_URL}/${encodeURIComponent(codigo)}`, {
+  // Obtener las cotizaciones propias del cliente autenticado
+  async obtenerMisCotizaciones(token) {
+    const res = await fetch(`${API_URL}/mis-cotizaciones`, {
       method: 'GET',
-      headers: { 'Content-Type': 'application/json' }
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      }
     });
     return handleResponse(res);
   },
 
-  // Listar cotizaciones para staff
+  // Consultar cotización por código correlativo (requiere sesión)
+  async obtenerPorCodigo(codigo, token) {
+    const res = await fetch(`${API_URL}/${encodeURIComponent(codigo)}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      }
+    });
+    return handleResponse(res);
+  },
+
+  // Listar todas las cotizaciones para staff
   async listar(token) {
     const res = await fetch(API_URL, {
       method: 'GET',

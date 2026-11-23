@@ -3,6 +3,7 @@ const router = express.Router();
 const {
   crearCotizacion,
   obtenerCotizacionPorCodigo,
+  obtenerMisCotizaciones,
   listarCotizaciones
 } = require('../controllers/cotizacionController');
 const { verificarToken, requerirRol } = require('../middlewares/authMiddleware');
@@ -10,10 +11,13 @@ const { verificarToken, requerirRol } = require('../middlewares/authMiddleware')
 // Endpoint público: Solicitar cotización formal (HU-07)
 router.post('/cotizaciones', crearCotizacion);
 
-// Endpoint Staff: Listar cotizaciones emitidas (declarado antes de /:codigo para evitar colisión de rutas)
+// Endpoint autenticado: Consultar todas las cotizaciones propias del usuario que inició sesión
+router.get('/cotizaciones/mis-cotizaciones', verificarToken, obtenerMisCotizaciones);
+
+// Endpoint Staff: Listar todas las cotizaciones emitidas en la tienda
 router.get('/cotizaciones', verificarToken, requerirRol(['SUPERADMIN', 'ADMIN']), listarCotizaciones);
 
-// Endpoint público: Consultar cotización por código (HU-07)
+// Endpoint de consulta por código correlativo
 router.get('/cotizaciones/:codigo', obtenerCotizacionPorCodigo);
 
 module.exports = router;

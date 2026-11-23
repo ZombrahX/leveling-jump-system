@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { reservaService } from '../services/reservaService';
 
-export default function OrderTrackingModal({ isOpen, onClose, codigoInicial = '' }) {
+export default function OrderTrackingModal({ isOpen, onClose, codigoInicial = '', usuarioActual }) {
   const [codigo, setCodigo] = useState(codigoInicial);
   const [cargando, setCargando] = useState(false);
   const [pedido, setPedido] = useState(null);
@@ -14,9 +14,20 @@ export default function OrderTrackingModal({ isOpen, onClose, codigoInicial = ''
     setError('');
     setPedido(null);
 
-    const codLimpio = codigo.trim();
+    if (!usuarioActual) {
+      setError('Debes iniciar sesión en tu cuenta para consultar el seguimiento de pedidos.');
+      return;
+    }
+
+    const codLimpio = codigo.trim().toUpperCase();
     if (!codLimpio) {
       setError('Por favor ingresa un código de pedido.');
+      return;
+    }
+
+    // Validación estricta anti-inyección: solo caracteres alfanuméricos y guiones (ej. RES-2026-1234)
+    if (!/^[A-Z0-9-]{4,35}$/.test(codLimpio)) {
+      setError('Formato de código no válido. Usa únicamente letras, números y guiones (ej: RES-2026-1140).');
       return;
     }
 

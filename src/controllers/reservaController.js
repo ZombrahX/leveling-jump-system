@@ -282,8 +282,17 @@ const actualizarEstadoReserva = async (req, res) => {
         throw err;
       }
 
-      // 3. Transición a ENTREGADA: sincronizar unidad física a VENDIDO (tolerando si ya estaba en VENDIDO por actualización previa de entrega)
+      // 3. Transición a ENTREGADA: exigir saldo pendiente = S/ 0.00 y sincronizar unidad física a VENDIDO
       if (estadoReserva === 'ENTREGADA') {
+        const saldoActual = parseFloat(reserva.saldoPendiente || 0);
+        if (saldoActual > 0) {
+          const err = new Error(
+            `Operación denegada: No se puede marcar como ENTREGADA una reserva con saldo pendiente de pago (Saldo actual: S/ ${saldoActual.toFixed(2)}). Primero debe completar el pago en "💰 Abonar".`
+          );
+          err.statusCode = 400;
+          throw err;
+        }
+
         if (!reserva.idUnidad) {
           const err = new Error('No se puede entregar una reserva que no cuenta con una unidad física asignada.');
           err.statusCode = 400;
@@ -773,6 +782,15 @@ const actualizarEstadoEntrega = async (req, res) => {
       }
 
       if (estadoEntrega === 'ENTREGADO') {
+        const saldoActual = parseFloat(reserva.saldoPendiente || 0);
+        if (saldoActual > 0) {
+          const err = new Error(
+            `Operación denegada: No se puede registrar el pedido como ENTREGADO mientras tenga saldo pendiente (Saldo actual: S/ ${saldoActual.toFixed(2)}). Primero liquide el saldo en "💰 Abonar".`
+          );
+          err.statusCode = 400;
+          throw err;
+        }
+
         dataToUpdate.estadoReserva = 'ENTREGADA';
         if (!reserva.idUnidad) {
           const err = new Error('No se puede entregar una reserva que no cuenta con una unidad física asignada.');

@@ -426,7 +426,9 @@ export default function ReservasList({ token }) {
                             <option value="PENDIENTE">PENDIENTE</option>
                           )}
                           <option value="CONFIRMADA">CONFIRMADA</option>
-                          <option value="ENTREGADA">ENTREGADA</option>
+                          <option value="ENTREGADA" disabled={saldoNum > 0}>
+                            {saldoNum > 0 ? 'ENTREGADA (Requiere Saldo S/ 0)' : 'ENTREGADA'}
+                          </option>
                           <option value="CANCELADA">CANCELADA</option>
                         </select>
                       )}
@@ -689,13 +691,23 @@ export default function ReservasList({ token }) {
                   {(() => {
                     const etapaActualObj = ESTADOS_ENTREGA.find(x => x.id === (reservaParaEntrega.estadoEntrega || 'PENDIENTE_PREPARACION'));
                     const ordenActual = etapaActualObj ? etapaActualObj.orden : 1;
-                    return ESTADOS_ENTREGA.map(e => (
-                      <option key={e.id} value={e.id} disabled={e.orden < ordenActual}>
-                        {e.label}
-                      </option>
-                    ));
+                    const tieneSaldoPendiente = Number(reservaParaEntrega.saldoPendiente || 0) > 0;
+                    return ESTADOS_ENTREGA.map(e => {
+                      const bloqueadoPorRetroceso = e.orden < ordenActual;
+                      const bloqueadoPorSaldo = e.id === 'ENTREGADO' && tieneSaldoPendiente;
+                      return (
+                        <option key={e.id} value={e.id} disabled={bloqueadoPorRetroceso || bloqueadoPorSaldo}>
+                          {bloqueadoPorSaldo ? `${e.label} — Requiere Saldo S/ 0.00` : e.label}
+                        </option>
+                      );
+                    });
                   })()}
                 </select>
+                {Number(reservaParaEntrega.saldoPendiente || 0) > 0 && (
+                  <small style={{ color: '#F59E0B', fontSize: '11px', display: 'block', marginTop: '4px' }}>
+                    ℹ️ Para marcar como "Entregado al cliente", el saldo pendiente (S/ {Number(reservaParaEntrega.saldoPendiente).toFixed(2)}) debe estar en S/ 0.00.
+                  </small>
+                )}
               </label>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '12px' }}>

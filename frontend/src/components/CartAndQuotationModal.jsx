@@ -780,7 +780,7 @@ export default function CartAndQuotationModal({
                             required
                             value={nombre}
                             onChange={e => setNombre(e.target.value)}
-                            placeholder="Ej: César Sánchez"
+                            placeholder="Ingresa tu nombre completo"
                             style={{ marginTop: '4px' }}
                           />
                         </label>
@@ -870,7 +870,7 @@ export default function CartAndQuotationModal({
                         type="text"
                         value={notas}
                         onChange={e => setNotas(e.target.value)}
-                        placeholder="Ej: Retiro en feria de Arenales o envío Shalom a provincia"
+                        placeholder="Indica modalidad de retiro o notas de envío"
                         style={{ marginTop: '4px' }}
                       />
                     </label>
@@ -943,7 +943,7 @@ export default function CartAndQuotationModal({
                         type="text"
                         value={observaciones}
                         onChange={e => setObservaciones(e.target.value)}
-                        placeholder="Ej: Deseo retirar en feria de Arenales o consultar despacho a provincia"
+                        placeholder="Notas o consultas adicionales sobre tu cotización"
                         style={{ marginTop: '4px' }}
                       />
                     </label>

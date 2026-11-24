@@ -478,7 +478,7 @@ export default function StaffManagement() {
                     <input
                       value={nuevoNombre}
                       onChange={e => setNuevoNombre(e.target.value)}
-                      placeholder="Ej: Daniel Carrión"
+                      placeholder="Nombre completo del colaborador"
                       required
                     />
                   </label>

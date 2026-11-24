@@ -62,7 +62,7 @@ export default function UserProfile({ usuario, onPerfilActualizado, onVerMisRese
             <input
               value={nombre}
               onChange={e => setNombre(e.target.value)}
-              placeholder="Ej: Carlos Gómez"
+              placeholder="Ingresa tu nombre completo"
               required
             />
           </label>

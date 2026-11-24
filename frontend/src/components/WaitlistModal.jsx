@@ -106,7 +106,7 @@ export default function WaitlistModal({ isOpen, onClose, producto, usuarioActual
                 required
                 value={nombre}
                 onChange={e => setNombre(e.target.value)}
-                placeholder="Ej: César Sánchez"
+                placeholder="Ingresa tu nombre completo"
                 style={{ marginTop: '4px' }}
               />
             </label>

@@ -363,7 +363,7 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }) {
                 <input
                   value={regForm.nombre}
                   onChange={e => setRegForm({ ...regForm, nombre: e.target.value })}
-                  placeholder="Ej: Juan Pérez"
+                  placeholder="Ingresa tu nombre completo"
                   required
                 />
               </label>

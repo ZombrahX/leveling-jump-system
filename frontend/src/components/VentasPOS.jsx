@@ -638,7 +638,7 @@ export default function VentasPOS({ productos = [], onVentaCompletada, token, us
                 </label>
                 <input
                   type="text"
-                  placeholder="Ej: @otaku_99 o Juan Pérez"
+                  placeholder="Nombre o usuario del comprador"
                   value={clienteRef}
                   onChange={(e) => setClienteRef(e.target.value)}
                   style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '12px', boxSizing: 'border-box' }}

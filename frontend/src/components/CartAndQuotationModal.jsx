@@ -405,7 +405,7 @@ export default function CartAndQuotationModal({
     const msg = encodeURIComponent(
       `¡Hola Leveling Jump! Solicito confirmar mi cotización oficial *${cotizacionGenerada.codigoCotizacion}* por un total de *S/ ${parseFloat(cotizacionGenerada.total).toFixed(2)}* emitida a nombre de ${cotizacionGenerada.nombreCliente}.`
     );
-    window.open(`https://wa.me/51999999999?text=${msg}`, '_blank');
+    window.open(`https://wa.me/51999999999?text=${msg}`, '_blank', 'noopener,noreferrer');
   };
 
   return (

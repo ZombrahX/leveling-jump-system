@@ -131,9 +131,38 @@ async function sendViaGmailSmtp({ creds, from, to, subject, text, html }) {
 }
 
 /**
+ * Protección de cuota diaria de Brevo y anti-spam por correo destinatario (máx. 5 correos cada 15 min por destinatario).
+ */
+const recipientQuotaMap = new Map();
+
+function checkRecipientEmailQuota(email) {
+  const key = String(email || '').trim().toLowerCase();
+  if (!key) return { allowed: true };
+  const now = Date.now();
+  const windowMs = 15 * 60 * 1000;
+  const maxPerWindow = 5;
+
+  const rec = recipientQuotaMap.get(key);
+  if (!rec || now > rec.resetAt) {
+    recipientQuotaMap.set(key, { count: 1, resetAt: now + windowMs });
+    return { allowed: true };
+  }
+  if (rec.count >= maxPerWindow) {
+    return { allowed: false, reason: 'Límite de envíos a este destinatario alcanzado temporalmente (máx. 5 cada 15 min).' };
+  }
+  rec.count += 1;
+  return { allowed: true };
+}
+
+/**
  * Orquesta el envío transaccional priorizando API HTTPS (si está configurada) y luego SMTP IPv4.
  */
 async function sendTransactionalEmail({ to, toName, fromLabel, subject, text, html, devFallbackCode }) {
+  const quotaCheck = checkRecipientEmailQuota(to);
+  if (!quotaCheck.allowed) {
+    console.warn(`[EmailService] Bloqueo preventivo de cuota para ${to}: ${quotaCheck.reason}`);
+    return { success: false, error: quotaCheck.reason };
+  }
   const isDev = process.env.NODE_ENV !== 'production';
   const smtpCreds = getSmtpCredentials();
   const senderEmail = (process.env.BREVO_SENDER_EMAIL || (smtpCreds ? smtpCreds.user : '')).trim();

@@ -80,7 +80,7 @@ export default function CustomerQuotations({ token, usuarioActual, onExplorarCat
     const msg = encodeURIComponent(
       `¡Hola Leveling Jump! Solicito confirmar mi cotización oficial *${cot.codigoCotizacion}* por un total de *S/ ${parseFloat(cot.total || 0).toFixed(2)}* emitida a nombre de ${cot.nombreCliente}.`
     );
-    window.open(`https://wa.me/51999999999?text=${msg}`, '_blank');
+    window.open(`https://wa.me/51999999999?text=${msg}`, '_blank', 'noopener,noreferrer');
   };
 
   const handleConfirmarORecalcular = async (cot, accion = 'confirmar') => {

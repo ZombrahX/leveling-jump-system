@@ -82,7 +82,7 @@ export default function CotizacionesList({ token }) {
     const msg = encodeURIComponent(
       `¡Hola ${c.nombreCliente}! Te saludamos de Leveling Jump. Te contactamos respecto a tu cotización *${c.codigoCotizacion}* por S/ ${parseFloat(c.total).toFixed(2)}.`
     );
-    window.open(`https://wa.me/${num}?text=${msg}`, '_blank');
+    window.open(`https://wa.me/${num}?text=${msg}`, '_blank', 'noopener,noreferrer');
   };
 
   const handleConfirmarORecalcular = async (cot, accion = 'confirmar') => {

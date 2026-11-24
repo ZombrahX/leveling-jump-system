@@ -180,5 +180,7 @@ export const authService = {
   cerrarSesion() {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
+    localStorage.removeItem('lj_mis_cotizaciones_cache');
+    localStorage.removeItem('lj_vista_activa');
   }
 };

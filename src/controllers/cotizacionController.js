@@ -1,6 +1,5 @@
-const { PrismaClient } = require('@prisma/client');
+const prisma = require('../lib/prisma');
 const crypto = require('crypto');
-const prisma = new PrismaClient();
 
 const sanitizarError = (error, defaultMsg = 'Error interno en la operación.') => {
   if (process.env.NODE_ENV === 'development') return error.message;

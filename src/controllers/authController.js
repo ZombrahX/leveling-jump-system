@@ -1,11 +1,9 @@
-const { PrismaClient } = require('@prisma/client');
+const prisma = require('../lib/prisma');
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { enviarCodigoVerificacion } = require('../services/emailService');
 const { JWT_SECRET } = require('../middlewares/authMiddleware');
-
-const prisma = new PrismaClient();
 
 // Correo oficial del Superadmin (Dueño)
 const CORREO_SUPERADMIN_OFICIAL = 'cesar.sanchez@isil.pe';
@@ -374,9 +372,12 @@ const loginGoogle = async (req, res) => {
     }
 
     let googleUser = null;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
     try {
       const googleRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-        headers: { Authorization: `Bearer ${accessToken}` }
+        headers: { Authorization: `Bearer ${accessToken}` },
+        signal: controller.signal
       });
       if (!googleRes.ok) {
         return res.status(401).json({ error: 'Token de acceso de Google inválido o expirado.' });
@@ -384,6 +385,8 @@ const loginGoogle = async (req, res) => {
       googleUser = await googleRes.json();
     } catch (err) {
       return res.status(401).json({ error: 'No se pudo validar el token con los servidores de Google.' });
+    } finally {
+      clearTimeout(timeoutId);
     }
 
     if (!googleUser || !googleUser.email || googleUser.email_verified === false) {

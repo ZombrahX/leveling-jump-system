@@ -1,7 +1,6 @@
-const { PrismaClient } = require('@prisma/client');
+const prisma = require('../lib/prisma');
+const crypto = require('crypto');
 const { enviarComprobanteReserva } = require('../services/emailService');
-
-const prisma = new PrismaClient();
 
 /**
  * Sanitiza los errores técnicos o de Prisma para evitar exponer rutas o fallas internas al cliente
@@ -20,12 +19,54 @@ function sanitizarError(error, defaultMsg = 'Ocurrió un error al procesar la re
 }
 
 /**
- * Genera un código correlativo único para reservas: RES-2026-XXXX
+ * Genera un código correlativo único para reservas con CSPRNG: RES-2026-XXXX
  */
 function generarCodigoSeguimiento() {
   const anio = new Date().getFullYear();
-  const random = Math.floor(1000 + Math.random() * 9000);
+  const random = crypto.randomInt(1000, 10000);
   return `RES-${anio}-${random}`;
+}
+
+/**
+ * Lazy Expiration Transaccional: Libera automáticamente reservas PENDIENTES sin abono cuya fechaLimite expiró,
+ * devolviendo sus unidades físicas de RESERVADO a DISPONIBLE sin intervención manual.
+ */
+async function liberarReservasExpiradas() {
+  try {
+    const ahora = new Date();
+    const vencidas = await prisma.reserva.findMany({
+      where: {
+        estadoReserva: 'PENDIENTE',
+        montoAdelanto: 0,
+        fechaLimite: { lt: ahora }
+      },
+      select: { id: true, idUnidad: true }
+    });
+
+    if (vencidas.length === 0) return 0;
+
+    await prisma.$transaction(async (tx) => {
+      const idsReservas = vencidas.map(r => r.id);
+      const idsUnidades = vencidas.map(r => r.idUnidad).filter(Boolean);
+
+      await tx.reserva.updateMany({
+        where: { id: { in: idsReservas }, estadoReserva: 'PENDIENTE' },
+        data: { estadoReserva: 'EXPIRADA' }
+      });
+
+      if (idsUnidades.length > 0) {
+        await tx.inventarioUnidad.updateMany({
+          where: { id: { in: idsUnidades }, estadoStock: 'RESERVADO' },
+          data: { estadoStock: 'DISPONIBLE' }
+        });
+      }
+    });
+
+    return vencidas.length;
+  } catch (err) {
+    console.warn('[ReservaController.liberarReservasExpiradas] Aviso:', err.message);
+    return 0;
+  }
 }
 
 /**
@@ -64,19 +105,21 @@ const crearReserva = async (req, res) => {
       return res.status(404).json({ error: 'El producto seleccionado no existe.' });
     }
 
-    const total = parseFloat(montoTotal || producto.precio);
-    const adelanto = parseFloat(montoAdelanto || 0);
+    // Integridad financiera: el precio total se obtiene exclusivamente de la tabla productos en BD (nunca del body)
+    const total = Math.round(parseFloat(producto.precio) * 100) / 100;
+    const adelanto = Math.round(parseFloat(montoAdelanto || 0) * 100) / 100;
 
-    if (adelanto < 0 || adelanto > total) {
-      return res.status(400).json({ 
-        error: `El adelanto (S/ ${adelanto}) no puede ser menor a 0 ni exceder el total (S/ ${total}).` 
+    if (isNaN(adelanto) || !isFinite(adelanto) || adelanto < 0 || adelanto > total) {
+      return res.status(400).json({
+        error: `El adelanto (S/ ${adelanto}) no puede ser menor a 0 ni exceder el precio oficial del producto (S/ ${total.toFixed(2)}).`
       });
     }
 
-    const saldo = Math.max(0, total - adelanto);
+    const saldo = Math.round((total - adelanto) * 100) / 100;
     const codigoSeguimiento = generarCodigoSeguimiento();
     const estadoInicial = adelanto > 0 ? 'CONFIRMADA' : 'PENDIENTE';
     const estadoPagoInicial = saldo === 0 ? 'COMPLETADO' : (adelanto > 0 ? 'PARCIAL' : 'PENDIENTE');
+    const fechaLimite = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
     // Transacción ACID para asegurar asignación atómica de inventario (P08 / P09 / HU-06 CA2)
     const resultado = await prisma.$transaction(async (tx) => {
@@ -126,11 +169,14 @@ const crearReserva = async (req, res) => {
           saldoPendiente: saldo,
           estadoReserva: estadoInicial,
           estadoPago: estadoPagoInicial,
+          fechaLimite,
           notas: notas ? notas.trim() : null
         },
         include: {
           producto: true,
-          unidadInventario: true
+          unidadInventario: {
+            select: { id: true, codigoSerie: true, estadoStock: true }
+          }
         }
       });
 
@@ -187,6 +233,7 @@ const crearReserva = async (req, res) => {
  */
 const obtenerReservas = async (req, res) => {
   try {
+    await liberarReservasExpiradas();
     const { estado, busqueda } = req.query;
     const filtro = {};
 
@@ -935,13 +982,20 @@ const crearReservasEnMasa = async (req, res) => {
           throw err;
         }
 
-        const precio = parseFloat(producto.precio);
-        const adelanto = parseFloat(item.adelantoAsignado || item.montoAdelanto || 0);
+        const precio = Math.round(parseFloat(producto.precio) * 100) / 100;
+        const rawAdelanto = item.adelantoAsignado ?? item.montoAdelanto ?? 0;
+        const adelanto = Math.round(Number(rawAdelanto) * 100) / 100;
+        if (isNaN(adelanto) || !isFinite(adelanto) || adelanto < 0 || adelanto > precio) {
+          const err = new Error(`Adelanto inválido para "${producto.nombre}". Debe estar entre S/ 0.00 y S/ ${precio.toFixed(2)}.`);
+          err.statusCode = 400;
+          throw err;
+        }
         const saldo = Math.round((precio - adelanto) * 100) / 100;
-        const codigoSeguimiento = `RES-${Date.now().toString().slice(-6)}-${Math.floor(100 + Math.random() * 900)}`;
+        const codigoSeguimiento = `RES-${Date.now().toString().slice(-6)}-${crypto.randomInt(100, 1000)}`;
 
         const estadoInicial = adelanto > 0 ? 'CONFIRMADA' : 'PENDIENTE';
         const estadoPagoInicial = saldo === 0 ? 'COMPLETADO' : (adelanto > 0 ? 'PARCIAL' : 'PENDIENTE');
+        const fechaLimite = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
         const nuevaReserva = await tx.reserva.create({
           data: {
@@ -957,11 +1011,14 @@ const crearReservasEnMasa = async (req, res) => {
             saldoPendiente: saldo,
             estadoReserva: estadoInicial,
             estadoPago: estadoPagoInicial,
+            fechaLimite,
             notas: notas ? notas.trim() : null
           },
           include: {
             producto: true,
-            unidadInventario: true
+            unidadInventario: {
+              select: { id: true, codigoSerie: true, estadoStock: true }
+            }
           }
         });
 

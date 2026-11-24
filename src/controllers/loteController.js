@@ -1,5 +1,4 @@
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const prisma = require('../lib/prisma');
 
 /**
  * PTLJ-26, PTLJ-27, PTLJ-28 & HU-12: Registrar la recepción de un lote con uno o múltiples productos
@@ -48,6 +47,10 @@ const registrarLoteConUnidades = async (req, res) => {
       });
     }
 
+    const MAX_UNIDADES_POR_LINEA = 500;
+    const MAX_UNIDADES_POR_LOTE = 2000;
+    let sumaUnidadesLote = 0;
+
     const itemsValidados = [];
     for (let idx = 0; idx < rawItems.length; idx++) {
       const it = rawItems[idx] || {};
@@ -59,9 +62,16 @@ const registrarLoteConUnidades = async (req, res) => {
       }
 
       const cant = Number(it.cantidad);
-      if (!cant || !Number.isInteger(cant) || cant <= 0) {
+      if (!cant || !Number.isInteger(cant) || cant <= 0 || cant > MAX_UNIDADES_POR_LINEA) {
         return res.status(400).json({
-          error: `La cantidad en la fila #${idx + 1} es obligatoria y debe ser un número entero mayor a 0.`
+          error: `La cantidad en la fila #${idx + 1} debe ser un número entero entre 1 y ${MAX_UNIDADES_POR_LINEA} unidades.`
+        });
+      }
+
+      sumaUnidadesLote += cant;
+      if (sumaUnidadesLote > MAX_UNIDADES_POR_LOTE) {
+        return res.status(400).json({
+          error: `El total de unidades físicas por lote no puede exceder ${MAX_UNIDADES_POR_LOTE} unidades.`
         });
       }
 
@@ -184,7 +194,8 @@ const obtenerLotes = async (req, res) => {
           }
         }
       },
-      orderBy: { fechaCreacion: 'desc' }
+      orderBy: { fechaCreacion: 'desc' },
+      take: 100
     });
 
     return res.status(200).json({

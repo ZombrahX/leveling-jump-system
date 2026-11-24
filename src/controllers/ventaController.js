@@ -1,13 +1,12 @@
-const { PrismaClient } = require('@prisma/client');
-
-const prisma = new PrismaClient();
+const prisma = require('../lib/prisma');
+const crypto = require('crypto');
 
 /**
- * Genera un código correlativo único para ventas: VTA-2026-XXXX
+ * Genera un código correlativo único para ventas con CSPRNG: VTA-2026-XXXX
  */
 function generarCodigoVenta() {
   const anio = new Date().getFullYear();
-  const random = Math.floor(1000 + Math.random() * 9000);
+  const random = crypto.randomInt(1000, 10000);
   return `VTA-${anio}-${random}`;
 }
 

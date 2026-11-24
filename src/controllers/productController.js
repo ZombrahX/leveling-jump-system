@@ -1,5 +1,4 @@
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const prisma = require('../lib/prisma');
 
 // PTLJ-14: Registrar un nuevo producto en el catálogo
 const registrarProducto = async (req, res) => {
@@ -58,13 +57,23 @@ const obtenerProductos = async (req, res) => {
             filtro.categoria = categoria;
         }
 
+        const limit = Math.min(Math.max(parseInt(req.query.limit) || 200, 1), 250);
+        const skip = Math.max(parseInt(req.query.skip) || 0, 0);
+
         const productos = await prisma.producto.findMany({
             where: filtro,
             include: {
                 _count: {
                     select: {
                         unidadesInventario: {
-                            where: { estadoStock: 'DISPONIBLE' }
+                            where: {
+                                estadoStock: 'DISPONIBLE',
+                                reservas: {
+                                    none: {
+                                        estadoReserva: { in: ['PENDIENTE', 'CONFIRMADA'] }
+                                    }
+                                }
+                            }
                         }
                     }
                 },
@@ -75,16 +84,20 @@ const obtenerProductos = async (req, res) => {
                     take: 1
                 }
             },
-            orderBy: { id: 'desc' }
+            orderBy: { id: 'desc' },
+            take: limit,
+            skip
         });
 
         const productosConStock = productos.map(p => {
             const ultimoCosto = p.unidadesInventario && p.unidadesInventario.length > 0
                 ? Number(p.unidadesInventario[0].costoUnitario)
                 : null;
+            const { unidadesInventario, _count, ...productoLimpio } = p;
             return {
-                ...p,
-                stockDisponible: p._count ? p._count.unidadesInventario : 0,
+                ...productoLimpio,
+                stockDisponible: _count ? _count.unidadesInventario : 0,
+                unidadesDisponibles: _count ? _count.unidadesInventario : 0,
                 costoReferencia: ultimoCosto
             };
         });

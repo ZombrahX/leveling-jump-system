@@ -1,5 +1,4 @@
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const prisma = require('../lib/prisma');
 
 const sanitizarError = (error, defaultMsg = 'Error interno en la operación.') => {
   if (process.env.NODE_ENV === 'development') return error.message;
@@ -136,6 +135,7 @@ const listarResumenIntereses = async (req, res) => {
   try {
     const intereses = await prisma.interesProducto.findMany({
       orderBy: { fechaRegistro: 'desc' },
+      take: 250,
       include: {
         producto: {
           select: { id: true, codigo: true, nombre: true, marca: true, precio: true }
@@ -143,21 +143,30 @@ const listarResumenIntereses = async (req, res) => {
       }
     });
 
+    // Consulta agrupada única (elimina problema N+1 en PostgreSQL)
+    const idsProductos = [...new Set(intereses.map(i => i.idProducto))];
+    const conteosStock = idsProductos.length > 0
+      ? await prisma.inventarioUnidad.groupBy({
+          by: ['idProducto'],
+          where: {
+            idProducto: { in: idsProductos },
+            estadoStock: 'DISPONIBLE',
+            reservas: {
+              none: { estadoReserva: { in: ['PENDIENTE', 'CONFIRMADA'] } }
+            }
+          },
+          _count: { id: true }
+        })
+      : [];
+
+    const mapaStock = new Map(conteosStock.map(c => [c.idProducto, c._count.id]));
+
     // Agrupar por producto para análisis de demanda e identificar productos con stock repuesto (HU08-P02)
     const agrupado = {};
     for (const item of intereses) {
       const pid = item.idProducto;
       if (!agrupado[pid]) {
-        // Consultar stock físico disponible actualmente
-        const stockActualDisp = await prisma.inventarioUnidad.count({
-          where: {
-            idProducto: pid,
-            estadoStock: 'DISPONIBLE',
-            reservas: {
-              none: { estadoReserva: { in: ['PENDIENTE', 'CONFIRMADA'] } }
-            }
-          }
-        });
+        const stockActualDisp = mapaStock.get(pid) || 0;
 
         agrupado[pid] = {
           producto: item.producto,

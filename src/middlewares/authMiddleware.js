@@ -1,11 +1,14 @@
 const jwt = require('jsonwebtoken');
+const { PrismaClient } = require('@prisma/client');
 
+const prisma = new PrismaClient();
 const JWT_SECRET = process.env.JWT_SECRET || 'leveling_jump_secure_jwt_token_2026_cesar_sanchez';
 
 /**
  * Middleware para validar el JWT en cabecera Authorization: Bearer <token>
+ * Fija algoritmo HS256 y verifica en tiempo real que la cuenta siga activa en base de datos.
  */
-const verificarToken = (req, res, next) => {
+const verificarToken = async (req, res, next) => {
   const authHeader = req.headers['authorization'];
   if (!authHeader) {
     return res.status(401).json({ error: 'Acceso no autorizado. Token no proporcionado.' });
@@ -14,8 +17,32 @@ const verificarToken = (req, res, next) => {
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : authHeader;
 
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    req.usuario = decoded;
+    const decoded = jwt.verify(token, JWT_SECRET, {
+      algorithms: ['HS256']
+    });
+
+    if (decoded && decoded.id) {
+      const usuarioActual = await prisma.usuario.findUnique({
+        where: { id: Number(decoded.id) },
+        select: {
+          id: true,
+          email: true,
+          nombre: true,
+          rol: true,
+          activo: true,
+          permisosModulos: true
+        }
+      });
+
+      if (!usuarioActual || !usuarioActual.activo) {
+        return res.status(401).json({ error: 'Tu cuenta ha sido desactivada o la sesión ya no es válida.' });
+      }
+
+      req.usuario = usuarioActual;
+    } else {
+      req.usuario = decoded;
+    }
+
     next();
   } catch (error) {
     return res.status(401).json({ error: 'Token inválido o expirado. Por favor inicia sesión nuevamente.' });
@@ -33,8 +60,8 @@ const requerirRol = (rolesPermitidos = []) => {
     }
 
     if (!rolesPermitidos.includes(req.usuario.rol)) {
-      return res.status(403).json({ 
-        error: 'Acceso denegado. No tienes permisos para acceder a este módulo.' 
+      return res.status(403).json({
+        error: 'Acceso denegado. No tienes permisos para acceder a este módulo.'
       });
     }
 

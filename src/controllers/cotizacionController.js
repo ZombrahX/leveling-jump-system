@@ -1,13 +1,41 @@
 const { PrismaClient } = require('@prisma/client');
+const crypto = require('crypto');
 const prisma = new PrismaClient();
 
 const sanitizarError = (error, defaultMsg = 'Error interno en la operación.') => {
   if (process.env.NODE_ENV === 'development') return error.message;
-  if (error.statusCode && error.statusCode < 500) return error.message;
-  if (error.message && !error.message.includes(':\\') && !error.message.includes('node_modules')) {
+  if (error && error.statusCode && error.statusCode >= 400 && error.statusCode < 500) {
     return error.message;
   }
   return defaultMsg;
+};
+
+/**
+ * Verifica si una cotización pertenece al usuario autenticado o si el usuario es miembro del Staff (BOLA / IDOR protection)
+ */
+const verificarPropiedadCotizacion = (cotizacion, usuario) => {
+  if (!usuario) return false;
+  if (['SUPERADMIN', 'ADMIN', 'VENDEDOR', 'OPERADOR'].includes(usuario.rol)) {
+    return true;
+  }
+  const rawObs = cotizacion.observaciones || '';
+  if (rawObs.includes(`[UID:${Number(usuario.id)}]`)) return true;
+
+  // Si la cotización tiene otro UID distinto al usuario autenticado, denegar acceso
+  const matchUid = rawObs.match(/\[UID:(\d+)\]/);
+  if (matchUid && Number(matchUid[1]) !== Number(usuario.id)) {
+    return false;
+  }
+
+  const emailUser = (usuario.email || '').trim().toLowerCase();
+  const emailCot = (cotizacion.emailCliente || '').trim().toLowerCase();
+  if (emailUser && emailCot && emailUser === emailCot) return true;
+
+  const nombreUser = (usuario.nombre || '').replace(/\s*\((Google|Local)\)/gi, '').trim().toLowerCase();
+  const nombreCot = (cotizacion.nombreCliente || '').trim().toLowerCase();
+  if (nombreUser && nombreCot && nombreUser === nombreCot) return true;
+
+  return false;
 };
 
 /**
@@ -289,8 +317,8 @@ const crearCotizacion = async (req, res) => {
 
     totalCotizacion = Math.round(totalCotizacion * 100) / 100;
 
-    // Generar código único correlativo COT-2026-XXXX
-    const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+    // Generar código único correlativo COT-2026-XXXX con CSPRNG (crypto.randomInt)
+    const randomSuffix = crypto.randomInt(1000, 10000);
     const codigoCotizacion = `COT-2026-${randomSuffix}`;
 
     // Vigencia: 7 días calendario
@@ -519,6 +547,12 @@ const confirmarORecalcularCotizacion = async (req, res) => {
       return res.status(404).json({ error: 'La cotización solicitada no existe.' });
     }
 
+    if (!verificarPropiedadCotizacion(cotizacionDB, req.usuario)) {
+      return res.status(403).json({
+        error: 'Acceso denegado: No tienes permisos para modificar una cotización que no pertenece a tu cuenta.'
+      });
+    }
+
     const [enriquecida] = await enriquecerCotizacionesConStockReal([cotizacionDB]);
 
     if (enriquecida.todosSinStock) {
@@ -609,6 +643,12 @@ const eliminarCotizacion = async (req, res) => {
 
     if (!existe) {
       return res.status(404).json({ error: 'La cotización que intenta eliminar ya no existe.' });
+    }
+
+    if (!verificarPropiedadCotizacion(existe, req.usuario)) {
+      return res.status(403).json({
+        error: 'Acceso denegado: No tienes permisos para eliminar una cotización que no pertenece a tu cuenta.'
+      });
     }
 
     await prisma.cotizacion.delete({

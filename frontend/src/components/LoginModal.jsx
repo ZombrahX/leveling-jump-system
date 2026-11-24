@@ -197,8 +197,8 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }) {
                 throw new Error('Google no devolvió un correo válido.');
               }
 
-              // Iniciar sesión / registrar en Leveling Jump
-              const data = await authService.loginGoogle(googleUser.email, googleUser.name);
+              // Iniciar sesión / registrar en Leveling Jump enviando el access_token para validación en servidor
+              const data = await authService.loginGoogle(googleUser.email, googleUser.name, tokenResponse.access_token);
               setSuccessMsg(`¡Autenticado con Google (${googleUser.email})!`);
               setTimeout(() => {
                 onLoginSuccess(data.usuario);

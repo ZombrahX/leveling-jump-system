@@ -1,16 +1,29 @@
 const express = require('express');
 const router = express.Router();
-const { 
-    registrarProducto, 
-    obtenerProductos, 
-    obtenerProductoPorId,
-    actualizarProducto 
+const {
+  registrarProducto,
+  obtenerProductos,
+  obtenerProductoPorId,
+  actualizarProducto
 } = require('../controllers/productController');
+const { verificarToken, requerirRol } = require('../middlewares/authMiddleware');
 
-// Rutas de productos (Catálogo - HU-03)
-router.post('/productos', registrarProducto);               // PTLJ-14: Registro
-router.get('/productos', obtenerProductos);                 // PTLJ-15: Listar/Buscar
-router.get('/productos/:id', obtenerProductoPorId);         // PTLJ-15: Buscar por ID
-router.put('/productos/:id', actualizarProducto);           // PTLJ-16: Actualización
+// Rutas públicas de consulta del catálogo comercial (HU-01)
+router.get('/productos', obtenerProductos);
+router.get('/productos/:id', obtenerProductoPorId);
+
+// Rutas administrativas protegidas contra BFLA (HU-03 — Solo Staff)
+router.post(
+  '/productos',
+  verificarToken,
+  requerirRol(['SUPERADMIN', 'ADMIN']),
+  registrarProducto
+);
+router.put(
+  '/productos/:id',
+  verificarToken,
+  requerirRol(['SUPERADMIN', 'ADMIN']),
+  actualizarProducto
+);
 
 module.exports = router;

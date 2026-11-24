@@ -27,12 +27,22 @@ leveling-jump-system/
 │   ├── schema.prisma     # Modelos relacionales declarativos
 │   └── migrations/       # Scripts DDL PostgreSQL ejecutados en Supabase
 ├── src/                  # Servidor Backend REST (Express.js)
-│   ├── controllers/      # Controladores de productos y lotes
-│   ├── routes/           # Rutas API (/api/productos, /api/lotes)
-│   └── index.js          # Punto de entrada del servidor
+│   ├── controllers/      # Controladores transaccionales (auth, productos, lotes, reservas, ventas, cotizaciones, intereses)
+│   ├── middlewares/      # Autenticación JWT (RBAC), Rate Limiting y cabeceras de seguridad HTTP
+│   ├── routes/           # Rutas API protegidas por rol y validación de entradas
+│   └── index.js          # Punto de entrada del servidor con CORS seguro y límite de payload
 ├── .env.example          # Plantilla segura de variables de entorno
 └── README.md             # Documentación oficial del proyecto
 ```
+
+---
+
+## 🛡️ Seguridad y Arquitectura Transaccional (AppSec)
+
+* **Control de Acceso y Autenticación (RBAC & BFLA/BOLA):** Validación JWT (`HS256`) con comprobación de cuenta activa en tiempo real, protección por rol (`SUPERADMIN`, `ADMIN`, `CLIENTE`) en rutas de catálogo y lotes, verificación de propiedad de recursos en cotizaciones y reservas, y validación de tokens OAuth 2.0 de Google en servidor.
+* **Criptografía y Protección contra Fuerza Bruta:** Generación de códigos OTP con CSPRNG (`crypto.randomInt`), comparación en tiempo constante (`crypto.timingSafeEqual`), hashing de contraseñas con `bcryptjs` y *Rate Limiting* por IP en rutas de autenticación.
+* **Prevención de Inyecciones y Endurecimiento HTTP:** Consultas parametrizadas vía Prisma ORM, validación regex estricta en códigos de rastreo/cotización, escape HTML anti-XSS en generación de proformas A4 (`printProforma.js`), cabeceras de seguridad HTTP (`HSTS`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`), política CORS por lista blanca y límite de payload JSON (`500kb`).
+* **Control de Concurrencia e Inventario Unitario:** Transacciones ACID (`prisma.$transaction`), bloqueo optimista (*Optimistic Locking*) en ventas y entregas, recepción multi-producto por lote y claves de idempotencia únicas en pagos parciales.
 
 ---
 

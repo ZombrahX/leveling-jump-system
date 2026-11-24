@@ -15,13 +15,27 @@ const {
   asignarRolStaff
 } = require('../controllers/authController');
 const { verificarToken, requerirRol } = require('../middlewares/authMiddleware');
+const { createRateLimiter } = require('../middlewares/securityMiddleware');
 
-// Rutas Públicas de Autenticación (HU-11 / PTLJ-43)
-router.post('/registro', registro);
-router.post('/verificar', verificarCodigo);
-router.post('/reenviar-codigo', reenviarCodigo);
-router.post('/login', login);
-router.post('/google', loginGoogle);
+// Limitadores de tasa por IP contra fuerza bruta en login/OTP y abuso de envío de correos
+const authLimiter = createRateLimiter({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  message: 'Demasiados intentos de autenticación desde esta dirección IP. Por favor intenta de nuevo en unos minutos.'
+});
+
+const otpResendLimiter = createRateLimiter({
+  windowMs: 10 * 60 * 1000,
+  max: 8,
+  message: 'Has superado el límite de reenvíos de código. Por favor revisa tu bandeja de Spam o espera unos minutos.'
+});
+
+// Rutas Públicas de Autenticación (HU-11 / PTLJ-43) protegidas con Rate Limiting
+router.post('/registro', authLimiter, registro);
+router.post('/verificar', authLimiter, verificarCodigo);
+router.post('/reenviar-codigo', otpResendLimiter, reenviarCodigo);
+router.post('/login', authLimiter, login);
+router.post('/google', authLimiter, loginGoogle);
 
 // Rutas Protegidas (HU-11 / Perfil de Usuario y Staff)
 router.get('/perfil', verificarToken, obtenerPerfil);

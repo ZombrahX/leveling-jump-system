@@ -73,12 +73,12 @@ export const authService = {
     return data;
   },
 
-  // Inicio de sesión con Google (One-Click)
-  async loginGoogle(email, nombre) {
+  // Inicio de sesión con Google (One-Click OAuth verificado)
+  async loginGoogle(email, nombre, accessToken = null) {
     const res = await fetch(`${API_BASE}/google`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, nombre })
+      body: JSON.stringify({ email, nombre, accessToken })
     });
     const data = await handleResponse(res);
     if (data.token && data.usuario) {

@@ -1,4 +1,17 @@
 /**
+ * Escapa caracteres especiales HTML para prevenir vulnerabilidades DOM / Stored XSS (CWE-79)
+ */
+function escapeHtml(valor) {
+  if (valor === null || valor === undefined) return '';
+  return String(valor)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/**
  * Imprime únicamente la hoja de Proforma / Cotización oficial en formato A4 limpio,
  * evitando que salga el fondo oscuro o las tablas de la aplicación detrás del modal.
  */
@@ -12,18 +25,25 @@ export function imprimirProformaOficial(cotizacion) {
     ? new Date(cotizacion.fechaVencimiento).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' })
     : '—';
 
+  const codigoSeguro = escapeHtml(cotizacion.codigoCotizacion);
+  const nombreClienteSeguro = escapeHtml(cotizacion.nombreCliente || 'Cliente');
+  const telefonoClienteSeguro = escapeHtml(cotizacion.telefonoCliente || '—');
+  const emailClienteSeguro = escapeHtml(cotizacion.emailCliente || 'No especificado');
+  const observacionesSeguras = escapeHtml(cotizacion.observaciones || 'Sin observaciones adicionales');
+
   const filasHTML = (cotizacion.items || [])
     .map(it => {
       const cant = Number(it.cantidad || 1);
       const pUnit = parseFloat(it.precioUnitario || 0).toFixed(2);
       const sub = parseFloat(it.subtotal || 0).toFixed(2);
+      const nombreProdSeguro = escapeHtml(it.nombreProducto || 'Producto');
       const alerta = it.mensajeAlerta
-        ? `<div style="color:#B45309;font-size:10.5px;margin-top:2px;">⚠️ ${it.mensajeAlerta}</div>`
+        ? `<div style="color:#B45309;font-size:10.5px;margin-top:2px;">⚠️ ${escapeHtml(it.mensajeAlerta)}</div>`
         : '';
       return `
         <tr>
           <td style="padding:10px 8px;border-bottom:1px solid #E2E8F0;color:#0F172A;font-weight:600;">
-            ${it.nombreProducto || 'Producto'}
+            ${nombreProdSeguro}
             ${alerta}
           </td>
           <td style="padding:10px 8px;border-bottom:1px solid #E2E8F0;text-align:center;color:#334155;">${cant}</td>
@@ -41,7 +61,7 @@ export function imprimirProformaOficial(cotizacion) {
     <html lang="es">
     <head>
       <meta charset="UTF-8" />
-      <title>Proforma ${cotizacion.codigoCotizacion} - Leveling Jump</title>
+      <title>Proforma ${codigoSeguro} - Leveling Jump</title>
       <style>
         @page {
           size: A4 portrait;
@@ -159,22 +179,22 @@ export function imprimirProformaOficial(cotizacion) {
             <p>Lima, Perú · WhatsApp Comercial: +51 999 888 777</p>
           </div>
           <div class="doc-meta">
-            <div class="code">${cotizacion.codigoCotizacion}</div>
-            <small>Fecha de Emisión: <strong>${fechaEmision}</strong></small>
-            <small style="color:#D97706;font-weight:700;">Válida hasta: ${fechaVencimiento}</small>
+            <div class="code">${codigoSeguro}</div>
+            <small>Fecha de Emisión: <strong>${escapeHtml(fechaEmision)}</strong></small>
+            <small style="color:#D97706;font-weight:700;">Válida hasta: ${escapeHtml(fechaVencimiento)}</small>
           </div>
         </div>
 
         <div class="client-box">
           <div>
             <span class="label">Datos del Cliente</span>
-            <div style="font-weight:700;color:#0F172A;font-size:13.5px;">${cotizacion.nombreCliente || 'Cliente'}</div>
-            <div style="color:#334155;margin-top:2px;">WhatsApp: ${cotizacion.telefonoCliente || '—'}</div>
+            <div style="font-weight:700;color:#0F172A;font-size:13.5px;">${nombreClienteSeguro}</div>
+            <div style="color:#334155;margin-top:2px;">WhatsApp: ${telefonoClienteSeguro}</div>
           </div>
           <div>
             <span class="label">Contacto & Observaciones</span>
-            <div style="color:#334155;">Correo: ${cotizacion.emailCliente || 'No especificado'}</div>
-            <div style="color:#475569;font-style:italic;margin-top:2px;">Notas: ${cotizacion.observaciones || 'Sin observaciones adicionales'}</div>
+            <div style="color:#334155;">Correo: ${emailClienteSeguro}</div>
+            <div style="color:#475569;font-style:italic;margin-top:2px;">Notas: ${observacionesSeguras}</div>
           </div>
         </div>
 

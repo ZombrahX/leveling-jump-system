@@ -1,4 +1,5 @@
 const { PrismaClient } = require('@prisma/client');
+const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { enviarCodigoVerificacion } = require('../services/emailService');
@@ -13,26 +14,37 @@ const CORREO_SUPERADMIN_OFICIAL = 'cesar.sanchez@isil.pe';
  * Sanitiza errores internos o de Prisma para que no revelen rutas del servidor ni detalles técnicos
  */
 function sanitizarError(error, defaultMsg = 'Ocurrió un error interno.') {
-  if (error.code === 'P2002') {
+  if (error && error.code === 'P2002') {
     return 'Ya existe un registro con esos datos (conflicto de duplicidad).';
   }
-  if (error.code && error.code.startsWith('P')) {
+  if (error && error.code && error.code.startsWith('P')) {
     return 'Inconsistencia en la base de datos al procesar la autenticación.';
   }
-  if (error.message && !error.message.includes('\n') && !error.message.includes('prisma') && !error.message.includes('C:\\') && !error.message.includes('/') && !error.message.includes('@prisma')) {
+  if (error && error.statusCode && error.statusCode >= 400 && error.statusCode < 500) {
     return error.message;
   }
   return defaultMsg;
 }
 
 /**
- * Genera código OTP de 6 dígitos y fecha de expiración (15 minutos).
+ * Genera código OTP de 6 dígitos con CSPRNG (crypto.randomInt) y fecha de expiración (15 minutos).
  */
 function generarOtpConExpiracion() {
   return {
-    codigo: Math.floor(100000 + Math.random() * 900000).toString(),
+    codigo: crypto.randomInt(100000, 1000000).toString(),
     expiracion: new Date(Date.now() + 15 * 60 * 1000)
   };
+}
+
+/**
+ * Comparación en tiempo constante (timing-safe) para códigos OTP contra ataques de canal lateral
+ */
+function compararOtpSeguro(otpAlmacenado, otpRecibido) {
+  if (!otpAlmacenado || !otpRecibido) return false;
+  const bufA = Buffer.from(String(otpAlmacenado).trim(), 'utf8');
+  const bufB = Buffer.from(String(otpRecibido).trim(), 'utf8');
+  if (bufA.length !== bufB.length) return false;
+  return crypto.timingSafeEqual(bufA, bufB);
 }
 
 /**
@@ -110,10 +122,10 @@ const registro = async (req, res) => {
 
     let usuario;
     if (usuarioExistente) {
-      if (usuarioExistente.emailVerificado) {
+      if (usuarioExistente.emailVerificado || usuarioExistente.rol === 'SUPERADMIN' || usuarioExistente.rol === 'ADMIN') {
         return res.status(400).json({ error: 'Este correo electrónico ya está registrado y verificado. Inicia sesión.' });
       }
-      // Si existía pero no estaba verificado, actualizamos el código y la contraseña
+      // Si existía como cliente no verificado, actualizamos código OTP
       usuario = await prisma.usuario.update({
         where: { id: usuarioExistente.id },
         data: {
@@ -183,7 +195,7 @@ const verificarCodigo = async (req, res) => {
       return res.status(200).json({ mensaje: 'Esta cuenta ya está verificada. Puedes iniciar sesión.' });
     }
 
-    if (usuario.codigoVerificacion !== codigo.trim()) {
+    if (!compararOtpSeguro(usuario.codigoVerificacion, codigo)) {
       return res.status(400).json({ error: 'Código de verificación incorrecto.' });
     }
 
@@ -344,52 +356,93 @@ const login = async (req, res) => {
 };
 
 /**
- * PTLJ-43 / HU-11: Inicio de sesión con Google (OAuth)
+ * PTLJ-43 / HU-11: Inicio de sesión con Google (OAuth 2.0 verificado en servidor)
  */
 const loginGoogle = async (req, res) => {
   try {
-    const { email, nombre } = req.body;
+    const { email, nombre, accessToken } = req.body;
 
-    if (!email) {
+    let emailVerificadoGoogle = email ? email.trim().toLowerCase() : '';
+    let nombreVerificadoGoogle = nombre ? nombre.trim() : '';
+    let tokenVerificadoServidor = false;
+
+    // 1. Si el frontend envía el access_token de Google Identity Services, validarlo criptográficamente contra Google UserInfo API
+    if (accessToken && typeof accessToken === 'string') {
+      try {
+        const googleRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+          headers: { Authorization: `Bearer ${accessToken}` }
+        });
+        if (!googleRes.ok) {
+          return res.status(401).json({ error: 'Token de acceso de Google inválido o expirado.' });
+        }
+        const googleUser = await googleRes.json();
+        if (!googleUser || !googleUser.email) {
+          return res.status(401).json({ error: 'Google no devolvió una identidad válida.' });
+        }
+        emailVerificadoGoogle = googleUser.email.trim().toLowerCase();
+        nombreVerificadoGoogle = (googleUser.name || nombreVerificadoGoogle || emailVerificadoGoogle.split('@')[0]).trim();
+        tokenVerificadoServidor = true;
+      } catch (err) {
+        return res.status(401).json({ error: 'No se pudo validar el token con los servidores de Google.' });
+      }
+    }
+
+    if (!emailVerificadoGoogle) {
       return res.status(400).json({ error: 'El correo de Google es obligatorio.' });
     }
 
-    const emailNormalizado = email.trim().toLowerCase();
     let usuario = await prisma.usuario.findUnique({
-      where: { email: emailNormalizado }
+      where: { email: emailVerificadoGoogle }
     });
 
-    if (!usuario) {
-      const total = await prisma.usuario.count();
-      const rol = (emailNormalizado === CORREO_SUPERADMIN_OFICIAL || total === 0) ? 'SUPERADMIN' : 'CLIENTE';
-
-      usuario = await prisma.usuario.create({
-        data: {
-          nombre: nombre ? nombre.trim() : emailNormalizado.split('@')[0],
-          email: emailNormalizado,
-          rol,
-          metodoRegistro: 'GOOGLE',
-          emailVerificado: true, // Google ya verificó el correo
-          permisosModulos: rol === 'SUPERADMIN' ? ['PRODUCTOS', 'LOTES', 'RESERVAS', 'USUARIOS'] : null
-        }
-      });
-    } else {
-      // Si existía, aseguramos que su correo figure verificado
-      if (!usuario.emailVerificado) {
-        usuario = await prisma.usuario.update({
-          where: { id: usuario.id },
-          data: { emailVerificado: true }
+    // 2. Protección contra Account Takeover (CWE-287):
+    // Si la petición no trae un accessToken verificado por Google, impedir el acceso a cuentas de Staff o cuentas con contraseña local
+    if (usuario && !tokenVerificadoServidor) {
+      if (usuario.rol === 'SUPERADMIN' || usuario.rol === 'ADMIN' || usuario.passwordHash) {
+        return res.status(401).json({
+          error: 'Verificación de seguridad requerida: Inicia sesión con tu contraseña o mediante la ventana oficial de Google.'
         });
       }
     }
 
-    const token = jwt.sign({
-      id: usuario.id,
-      email: usuario.email,
-      nombre: usuario.nombre,
-      rol: usuario.rol,
-      permisosModulos: usuario.permisosModulos
-    }, JWT_SECRET, { expiresIn: '7d' });
+    if (usuario && !usuario.activo) {
+      return res.status(403).json({ error: 'Tu cuenta se encuentra desactivada.' });
+    }
+
+    if (!usuario) {
+      const total = await prisma.usuario.count();
+      const rol = (tokenVerificadoServidor && (emailVerificadoGoogle === CORREO_SUPERADMIN_OFICIAL || total === 0))
+        ? 'SUPERADMIN'
+        : 'CLIENTE';
+
+      usuario = await prisma.usuario.create({
+        data: {
+          nombre: nombreVerificadoGoogle || emailVerificadoGoogle.split('@')[0],
+          email: emailVerificadoGoogle,
+          rol,
+          metodoRegistro: 'GOOGLE',
+          emailVerificado: true,
+          permisosModulos: rol === 'SUPERADMIN' ? ['PRODUCTOS', 'LOTES', 'RESERVAS', 'USUARIOS'] : null
+        }
+      });
+    } else if (!usuario.emailVerificado && tokenVerificadoServidor) {
+      usuario = await prisma.usuario.update({
+        where: { id: usuario.id },
+        data: { emailVerificado: true }
+      });
+    }
+
+    const token = jwt.sign(
+      {
+        id: usuario.id,
+        email: usuario.email,
+        nombre: usuario.nombre,
+        rol: usuario.rol,
+        permisosModulos: usuario.permisosModulos
+      },
+      JWT_SECRET,
+      { algorithm: 'HS256', expiresIn: '7d' }
+    );
 
     return res.status(200).json({
       mensaje: 'Autenticado con Google exitosamente.',

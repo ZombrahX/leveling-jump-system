@@ -275,24 +275,6 @@ export default function App() {
                 </button>
                 <button
                   type="button"
-                  className={`secondary ${vista === 'mis-reservas' ? 'active' : ''}`}
-                  onClick={() => chooseView('mis-reservas')}
-                  style={{ padding: '6px 10px', fontSize: '12px' }}
-                  title="Mis reservas registradas"
-                >
-                  🔖 Mis Reservas
-                </button>
-                <button
-                  type="button"
-                  className={`secondary ${vista === 'mis-cotizaciones' ? 'active' : ''}`}
-                  onClick={() => chooseView('mis-cotizaciones')}
-                  style={{ padding: '6px 10px', fontSize: '12px' }}
-                  title="Mis cotizaciones generadas"
-                >
-                  📋 Mis Cotizaciones
-                </button>
-                <button
-                  type="button"
                   className="secondary"
                   onClick={handleLogout}
                   style={{ padding: '6px 10px', fontSize: '12px' }}
@@ -345,12 +327,6 @@ export default function App() {
                   onClick={() => chooseView('mis-cotizaciones')}
                 >
                   <span>📋</span> Mis Cotizaciones
-                </button>
-                <button
-                  className={`nav-bar-btn ${vista === 'perfil' ? 'active' : ''}`}
-                  onClick={() => chooseView('perfil')}
-                >
-                  <span>👤</span> Mi Perfil
                 </button>
               </>
             )}
@@ -512,14 +488,6 @@ export default function App() {
                 )}
               </div>
             )}
-
-            {/* Acceso a Mi Perfil para Staff */}
-            <button
-              className={`nav-bar-btn ${vista === 'perfil' ? 'active' : ''}`}
-              onClick={() => chooseView('perfil')}
-            >
-              <span>👤</span> Mi Perfil
-            </button>
           </>
         )}
       </nav>

@@ -128,7 +128,7 @@ const registro = async (req, res) => {
     let usuario;
     if (usuarioExistente) {
       if (usuarioExistente.emailVerificado || usuarioExistente.rol === 'SUPERADMIN' || usuarioExistente.rol === 'ADMIN') {
-        return res.status(400).json({ error: 'Este correo electrónico ya está registrado y verificado. Inicia sesión.' });
+        return res.status(400).json({ error: 'Este correo electrónico ya está registrado. Por favor, inicia sesión.' });
       }
       // Si existía como cliente no verificado, actualizamos código OTP
       usuario = await prisma.usuario.update({
@@ -305,17 +305,17 @@ const login = async (req, res) => {
     // Hash dummy para mantener tiempo constante y evitar enumeración de usuarios/proveedores (CWE-204 / CWE-208)
     const DUMMY_BCRYPT_HASH = '$2b$10$CwTycUXWue0Thq9StjUM0uJ8p4K1.F8H0v7G6W5L2M3N4O5P6Q7R8';
 
-    // Rechazar credenciales inválidas sin revelar si el correo existe o qué proveedor usa
+    // Rechazar credenciales inválidas con mensaje claro y directo
     if (!usuario || !usuario.activo || !usuario.passwordHash) {
       await bcrypt.compare(password, DUMMY_BCRYPT_HASH).catch(() => {});
       return res.status(401).json({
-        error: 'Credenciales inválidas. Verifica tu correo y contraseña (o inicia sesión con Google si registraste tu cuenta por ese medio).'
+        error: 'Correo o contraseña incorrectos.'
       });
     }
 
     const passwordValido = await bcrypt.compare(password, usuario.passwordHash);
     if (!passwordValido) {
-      return res.status(401).json({ error: 'Credenciales inválidas. Verifica tu correo y contraseña.' });
+      return res.status(401).json({ error: 'Correo o contraseña incorrectos.' });
     }
 
     // Verificar si el correo ya fue confirmado

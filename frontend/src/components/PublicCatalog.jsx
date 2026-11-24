@@ -133,40 +133,24 @@ export default function PublicCatalog({
                         🔔 Avisarme (Waitlist)
                       </button>
                     ) : (
-                      <>
-                        <button
-                          type="button"
-                          className="primary"
-                          style={{
-                            flex: 1,
-                            padding: '8px 10px',
-                            fontSize: '12.5px',
-                            cursor: 'pointer',
-                            background: cartItem ? 'var(--color-cyan)' : undefined,
-                            color: cartItem ? '#080B0F' : undefined,
-                            fontWeight: cartItem ? 'bold' : 'normal',
-                            boxShadow: cartItem ? '0 0 10px var(--color-cyan-glow)' : undefined
-                          }}
-                          onClick={() => onAddToCart && onAddToCart(p)}
-                          title="Añadir al carrito de compras"
-                        >
-                          {cartItem ? `🛒 En Carrito (${cartItem.cantidad}) +` : '🛒 Al Carrito'}
-                        </button>
-                        <button
-                          type="button"
-                          className="secondary"
-                          style={{
-                            padding: '8px 12px',
-                            fontSize: '12.5px',
-                            whiteSpace: 'nowrap',
-                            cursor: 'pointer'
-                          }}
-                          onClick={() => onApartarDirecto && onApartarDirecto(p)}
-                          title="Apartar inmediatamente este kit con adelanto"
-                        >
-                          🔖 Apartar
-                        </button>
-                      </>
+                      <button
+                        type="button"
+                        className="primary"
+                        style={{
+                          width: '100%',
+                          padding: '9px 12px',
+                          fontSize: '13px',
+                          cursor: 'pointer',
+                          background: cartItem ? 'var(--color-cyan)' : undefined,
+                          color: cartItem ? '#080B0F' : undefined,
+                          fontWeight: 'bold',
+                          boxShadow: cartItem ? '0 0 10px var(--color-cyan-glow)' : undefined
+                        }}
+                        onClick={() => onAddToCart && onAddToCart(p)}
+                        title="Añadir al carrito para reservar con adelanto o solicitar cotización"
+                      >
+                        {cartItem ? `🛒 En Carrito (${cartItem.cantidad}) · Añadir otro +` : '🛒 Agregar al Carrito'}
+                      </button>
                     )}
                   </div>
                 </div>

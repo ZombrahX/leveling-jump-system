@@ -21,11 +21,15 @@ export const reservaService = {
     return handleResponse(res);
   },
 
-  // Registrar reservas en masa atómicamente (Bolsa de Reserva / Carrito Multi-kit sin confirmaciones parciales)
+  // Registrar reservas en masa atómicamente (Carrito Multi-kit sin confirmaciones parciales)
   async crearReservasEnMasa(items, clienteData) {
+    const token = localStorage.getItem('lj_auth_token');
     const res = await fetch(`${API_URL}/en-masa`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      },
       body: JSON.stringify({
         items: items.map(it => ({
           idProducto: it.id,
@@ -34,7 +38,8 @@ export const reservaService = {
         nombreCliente: clienteData.nombreCliente,
         telefonoCliente: clienteData.telefonoCliente,
         emailCliente: clienteData.emailCliente || null,
-        notas: clienteData.notas || ''
+        notas: clienteData.notas || '',
+        idUsuario: clienteData.idUsuario || null
       })
     });
     const data = await handleResponse(res);

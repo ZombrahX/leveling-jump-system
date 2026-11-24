@@ -11,10 +11,10 @@ const MEDIOS_PAGO = [
 ];
 
 const MODALIDADES_ENTREGA = [
-  { id: 'RETIRO_FERIA', label: '🎪 Retiro en Feria (Sábados)' },
-  { id: 'RETIRO_TIENDA', label: '🏪 Retiro en Almacén / Tienda' },
-  { id: 'ENVIO_LIMA', label: '🛵 Delivery Lima Metropolitana' },
-  { id: 'ENVIO_PROVINCIA', label: '📦 Envío a Provincia (Shalom / Olva)' }
+  { id: 'RETIRO_FERIA', label: '🎪 Entrega Presencial (Feria / Tren / Punto Acordado)' },
+  { id: 'RETIRO_TIENDA', label: '🏪 Retiro Presencial en Almacén / Tienda' },
+  { id: 'ENVIO_LIMA', label: '🚕 Envío Local (Taxi / Auto Privado / Motorizado / Courier)' },
+  { id: 'ENVIO_PROVINCIA', label: '📦 Envío por Agencia / Courier' }
 ];
 
 const ESTADOS_ENTREGA = [
@@ -47,6 +47,7 @@ export default function ReservasList({ token }) {
   const [modalidadEntregaInput, setModalidadEntregaInput] = useState('RETIRO_FERIA');
   const [estadoEntregaInput, setEstadoEntregaInput] = useState('PENDIENTE_PREPARACION');
   const [fechaEstimadaInput, setFechaEstimadaInput] = useState('');
+  const [empresaCourierInput, setEmpresaCourierInput] = useState('');
   const [guiaCourierInput, setGuiaCourierInput] = useState('');
   const [direccionEntregaInput, setDireccionEntregaInput] = useState('');
   const [guardandoEntrega, setGuardandoEntrega] = useState(false);
@@ -145,7 +146,23 @@ export default function ReservasList({ token }) {
         ? new Date(reserva.fechaEstimadaEntrega).toISOString().split('T')[0]
         : ''
     );
-    setGuiaCourierInput(reserva.guiaCourier || '');
+
+    const rawGuia = reserva.guiaCourier || '';
+    if (rawGuia.includes(' | Cód: ')) {
+      const [emp, cod] = rawGuia.split(' | Cód: ');
+      setEmpresaCourierInput(emp.replace(/^Medio:\s*/i, '').trim());
+      setGuiaCourierInput((cod || '').trim());
+    } else if (rawGuia.startsWith('Medio: ')) {
+      setEmpresaCourierInput(rawGuia.replace(/^Medio:\s*/i, '').trim());
+      setGuiaCourierInput('');
+    } else if (rawGuia.startsWith('Cód: ')) {
+      setEmpresaCourierInput('');
+      setGuiaCourierInput(rawGuia.replace(/^Cód:\s*/i, '').trim());
+    } else {
+      setEmpresaCourierInput('');
+      setGuiaCourierInput(rawGuia);
+    }
+
     setDireccionEntregaInput(reserva.direccionEntrega || '');
     setErrorModalEntrega('');
   };
@@ -153,6 +170,17 @@ export default function ReservasList({ token }) {
   const handleGuardarEntrega = async (e) => {
     e.preventDefault();
     setErrorModalEntrega('');
+
+    const empLimpia = empresaCourierInput.trim();
+    const codLimpio = guiaCourierInput.trim();
+    let guiaCombinada = null;
+    if (empLimpia && codLimpio) {
+      guiaCombinada = `${empLimpia} | Cód: ${codLimpio}`;
+    } else if (empLimpia) {
+      guiaCombinada = `Medio: ${empLimpia}`;
+    } else if (codLimpio) {
+      guiaCombinada = `Cód: ${codLimpio}`;
+    }
 
     try {
       setGuardandoEntrega(true);
@@ -162,7 +190,7 @@ export default function ReservasList({ token }) {
           modalidadEntrega: modalidadEntregaInput,
           estadoEntrega: estadoEntregaInput,
           fechaEstimadaEntrega: fechaEstimadaInput || null,
-          guiaCourier: guiaCourierInput.trim() || null,
+          guiaCourier: guiaCombinada,
           direccionEntrega: direccionEntregaInput.trim() || null
         },
         token
@@ -297,7 +325,12 @@ export default function ReservasList({ token }) {
                     )}
                     {r.guiaCourier && (
                       <small style={{ color: '#D97706', fontWeight: 700, display: 'block', fontFamily: 'monospace' }}>
-                        Guía: {r.guiaCourier}
+                        🚚 {r.guiaCourier}
+                      </small>
+                    )}
+                    {r.direccionEntrega && (
+                      <small style={{ color: '#64748B', display: 'block' }}>
+                        📍 {r.direccionEntrega}
                       </small>
                     )}
                   </td>
@@ -632,6 +665,30 @@ export default function ReservasList({ token }) {
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '12px' }}>
                 <label style={{ margin: 0 }}>
+                  Courier / Medio de Entrega (Opcional)
+                  <input
+                    type="text"
+                    value={empresaCourierInput}
+                    onChange={e => setEmpresaCourierInput(e.target.value)}
+                    placeholder="Ej: Olva, Shalom, Taxi, Tren, En persona..."
+                    style={{ marginTop: '4px', width: '100%' }}
+                  />
+                </label>
+
+                <label style={{ margin: 0 }}>
+                  Código de Envío / Guía / Tracking (Opcional)
+                  <input
+                    type="text"
+                    value={guiaCourierInput}
+                    onChange={e => setGuiaCourierInput(e.target.value)}
+                    placeholder="Ej: 884920-26 / Guía / Placa"
+                    style={{ marginTop: '4px', width: '100%' }}
+                  />
+                </label>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '16px' }}>
+                <label style={{ margin: 0 }}>
                   Fecha Estimada de Entrega
                   <input
                     type="date"
@@ -642,27 +699,16 @@ export default function ReservasList({ token }) {
                 </label>
 
                 <label style={{ margin: 0 }}>
-                  Nro. Guía Courier (Opcional)
+                  Dirección / Punto de Entrega (Opcional)
                   <input
                     type="text"
-                    value={guiaCourierInput}
-                    onChange={e => setGuiaCourierInput(e.target.value)}
-                    placeholder="Ej: SHALOM-998877"
+                    value={direccionEntregaInput}
+                    onChange={e => setDireccionEntregaInput(e.target.value)}
+                    placeholder="Ej: Estación del Tren / Agencia / Domicilio"
                     style={{ marginTop: '4px', width: '100%' }}
                   />
                 </label>
               </div>
-
-              <label style={{ display: 'block', marginBottom: '16px' }}>
-                Dirección / Punto de Entrega (Opcional)
-                <input
-                  type="text"
-                  value={direccionEntregaInput}
-                  onChange={e => setDireccionEntregaInput(e.target.value)}
-                  placeholder="Ej: C.C. Arenales Stand Leveling Jump / Agencia Shalom Trujillo"
-                  style={{ marginTop: '4px', width: '100%' }}
-                />
-              </label>
 
               <div style={{ display: 'flex', gap: '10px' }}>
                 <button

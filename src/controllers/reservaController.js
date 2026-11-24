@@ -342,19 +342,36 @@ const actualizarEstadoReserva = async (req, res) => {
 };
 
 /**
- * Obtener las reservas del cliente autenticado
+ * Obtener las reservas del cliente autenticado (incluyendo seguimiento de entrega y courier)
  */
 const obtenerMisReservas = async (req, res) => {
   try {
-    const idUsuario = req.usuario.id;
-    const emailUsuario = (req.usuario.email || '').trim().toLowerCase();
+    const idUsuario = Number(req.usuario.id);
+    const usuarioDB = await prisma.usuario.findUnique({
+      where: { id: idUsuario },
+      select: { email: true, nombre: true, telefono: true }
+    });
+
+    const emailUsuario = (usuarioDB?.email || req.usuario.email || '').trim().toLowerCase();
+    const nombreUsuario = (usuarioDB?.nombre || req.usuario.nombre || '')
+      .replace(/\s*\((Google|Local)\)/gi, '')
+      .trim();
+    const telUsuario = (usuarioDB?.telefono || '').replace(/\D/g, '');
+
+    const condicionesOR = [{ idUsuario }];
+    if (emailUsuario) {
+      condicionesOR.push({ emailCliente: { equals: emailUsuario, mode: 'insensitive' } });
+    }
+    if (telUsuario && telUsuario.length >= 7) {
+      condicionesOR.push({ telefonoCliente: { contains: telUsuario } });
+    }
+    if (nombreUsuario) {
+      condicionesOR.push({ nombreCliente: { equals: nombreUsuario, mode: 'insensitive' } });
+    }
 
     const reservas = await prisma.reserva.findMany({
       where: {
-        OR: [
-          { idUsuario: idUsuario },
-          ...(emailUsuario ? [{ emailCliente: emailUsuario }] : [])
-        ]
+        OR: condicionesOR
       },
       include: {
         producto: {
@@ -614,10 +631,10 @@ const consultarSeguimientoPublico = async (req, res) => {
 
     // Modalidad legible para el cliente
     const modalidadesTexto = {
-      RETIRO_FERIA: '🎪 Retiro en Feria de los Sábados (Arenales - Stand Leveling Jump)',
-      RETIRO_TIENDA: '🏪 Retiro en Punto Central / Almacén',
-      ENVIO_LIMA: '🛵 Envío a Domicilio en Lima Metropolitana',
-      ENVIO_PROVINCIA: '📦 Envío a Provincia (Agencia Shalom / Marvisur)'
+      RETIRO_FERIA: '🎪 Entrega Presencial (Feria / Estación de Tren / Punto Acordado)',
+      RETIRO_TIENDA: '🏪 Retiro Presencial en Almacén / Tienda',
+      ENVIO_LIMA: '🚕 Envío Local (Taxi / Auto Privado / Motorizado / Courier)',
+      ENVIO_PROVINCIA: '📦 Envío por Agencia / Courier'
     };
 
     const estadosEntregaTexto = {
@@ -794,7 +811,7 @@ const actualizarEstadoEntrega = async (req, res) => {
  */
 const crearReservasEnMasa = async (req, res) => {
   try {
-    const { items, nombreCliente, telefonoCliente, emailCliente, notas } = req.body;
+    const { items, nombreCliente, telefonoCliente, emailCliente, notas, idUsuario: bodyIdUsuario } = req.body;
 
     if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: 'La lista de productos para reservar no puede estar vacía.' });
@@ -808,7 +825,7 @@ const crearReservasEnMasa = async (req, res) => {
       return res.status(400).json({ error: 'El teléfono/WhatsApp es obligatorio.' });
     }
 
-    const idUsuario = req.usuario ? req.usuario.id : null;
+    const idUsuario = req.usuario ? req.usuario.id : (bodyIdUsuario && Number.isInteger(Number(bodyIdUsuario)) ? Number(bodyIdUsuario) : null);
 
     const resultado = await prisma.$transaction(async (tx) => {
       const reservasCreadas = [];

@@ -239,6 +239,18 @@ export default function CustomerReservations({ token, onExplorarCatalogo }) {
                     <span style={{ color: '#64748B', display: 'block', fontSize: '11.5px', fontWeight: '600' }}>Saldo Pendiente:</span>
                     <strong style={{ color: '#D97706', fontSize: '14.5px' }}>S/ {saldo.toFixed(2)}</strong>
                   </div>
+                  {res.guiaCourier && (
+                    <div>
+                      <span style={{ color: '#64748B', display: 'block', fontSize: '11.5px', fontWeight: '600' }}>Courier / Código de Envío:</span>
+                      <strong style={{ color: '#0284C7', fontSize: '13px', fontFamily: 'monospace' }}>🚚 {res.guiaCourier}</strong>
+                    </div>
+                  )}
+                  {res.direccionEntrega && (
+                    <div>
+                      <span style={{ color: '#64748B', display: 'block', fontSize: '11.5px', fontWeight: '600' }}>Punto / Dirección de Entrega:</span>
+                      <span style={{ color: '#0F172A', fontSize: '12.5px', fontWeight: 600 }}>📍 {res.direccionEntrega}</span>
+                    </div>
+                  )}
                   {res.notas && (
                     <div style={{ gridColumn: '1 / -1', borderTop: '1px dashed #E2E8F0', paddingTop: '8px', marginTop: '4px' }}>
                       <span style={{ color: '#64748B', fontSize: '11.5px', fontWeight: '600' }}>Modalidad / Notas: </span>

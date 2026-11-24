@@ -48,7 +48,7 @@ export default function App() {
       const guardada = localStorage.getItem('lj_vista_activa');
       if (guardada) {
         const vistasStaff = ['productos', 'recepcion', 'ventas-pos', 'reservas', 'cotizaciones', 'intereses'];
-        const vistasAuth = ['mis-reservas', 'mis-cotizaciones', 'perfil'];
+        const vistasAuth = ['rastrear-pedido', 'mis-reservas', 'mis-cotizaciones', 'perfil'];
         if (guardada === 'staff' && esSuperadmin) return 'staff';
         if (vistasStaff.includes(guardada) && esStaff) return guardada;
         if (vistasAuth.includes(guardada) && usuario) return guardada;
@@ -310,9 +310,9 @@ export default function App() {
             {usuario && (
               <>
                 <button
-                  className="nav-bar-btn"
-                  onClick={() => setShowTrackingModal(true)}
-                  title="Rastrear avance y entrega de tu pedido con tu código de reserva"
+                  className={`nav-bar-btn ${vista === 'rastrear-pedido' ? 'active' : ''}`}
+                  onClick={() => chooseView('rastrear-pedido')}
+                  title="Ver el seguimiento, transporte y código de envío de tus pedidos"
                 >
                   <span>📍</span> Rastrear Pedido
                 </button>
@@ -512,6 +512,16 @@ export default function App() {
         </div>
       )}
 
+      {vista === 'rastrear-pedido' && usuario && (
+        <div className="single-view">
+          <OrderTrackingModal
+            token={token}
+            usuarioActual={usuario}
+            onExplorarCatalogo={() => chooseView('catalogo')}
+          />
+        </div>
+      )}
+
       {vista === 'mis-reservas' && usuario && (
         <div className="single-view">
           <CustomerReservations
@@ -643,12 +653,6 @@ export default function App() {
         producto={productoReserva}
         usuarioActual={usuario}
         onClose={() => setProductoReserva(null)}
-      />
-
-      <OrderTrackingModal
-        isOpen={showTrackingModal}
-        onClose={() => setShowTrackingModal(false)}
-        usuarioActual={usuario}
       />
 
       <CartAndQuotationModal

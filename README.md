@@ -46,6 +46,22 @@ leveling-jump-system/
 
 ---
 
+## 🧭 Mapa de Módulos de la Aplicación Web
+
+### 👤 Vista de Comprador / Cliente
+* **🛍️ Catálogo Comercial & 🛒 Carrito Flotante Unificado:** Exploración libre de productos con stock en tiempo real. Cada producto disponible cuenta con el botón **`🛒 Agregar al Carrito`** (y **`🔔 Avisarme (Waitlist)`** cuando está agotado). Desde el carrito, el cliente autenticado elige entre **Apartar con Adelanto (Reserva 20% / 30% / 50%)** o **Emitir Cotización Formal (Proforma válida por 7 días)**.
+* **📍 Rastrear Pedido (Historial de Cuenta):** Panel que lista todos los pedidos asociados a la cuenta del cliente con barra de progreso de 4 etapas (*1. Pedido Registrado -> 2. En Preparación -> 3. Listo / En Ruta -> 4. Entregado*), modalidad de entrega, **Courier / Medio de Transporte** y **Código de Envío / Guía** con botón de copiado rápido.
+* **🔖 Mis Reservas:** Desglose financiero de cada reserva (Total, Adelanto Abonado, Saldo Pendiente) y coordinación directa al WhatsApp configurado de la tienda.
+* **📋 Mis Cotizaciones:** Historial de proformas con filtros por código, fecha de emisión y estado, **validación de stock en tiempo real** (`🟢 VIGENTE`, `⚠️ VARIACIÓN DE STOCK` con recálculo de total, `🚫 IMPOSIBLE COTIZAR - SIN STOCK`), confirmación, eliminación e **impresión limpia en hoja A4 PDF**.
+
+### 🛡️ Paneles Exclusivos de Staff (`ADMIN` y `SUPERADMIN`)
+* **📦 Catálogo & Tienda:** Gestión de Productos (validación de precio $\ge$ costo), Catálogo Comercial y **⚙️ Configuración de Tienda** (actualización en tiempo real del número de WhatsApp de atención y ventas).
+* **📥 Almacén & Lotes:** **Recepción Multi-Producto de Lotes** (múltiples productos en un mismo embarque con generación de series unitarias) y **🔔 Lista de Espera y Demanda** (alerta verde automática cuando ingresa stock de un producto agotado).
+* **🔖 Ventas & Reservas:** **Punto de Venta Multicanal (POS)** para Ferias, TikTok Live, Facebook y Web; **Control de Reservas, Abonos y Entregas** (con máquina de estados inmutable hacia adelante y exigencia de `Saldo = S/ 0.00` antes de marcar como `ENTREGADA`); e **Historial de Cotizaciones**.
+* **👑 Administración (`SUPERADMIN`):** Gestión de Staff, búsqueda de usuarios y asignación de roles/permisos.
+
+---
+
 ## ⚙️ Guía de Ejecución Local
 
 ### 1. Requisitos Previos

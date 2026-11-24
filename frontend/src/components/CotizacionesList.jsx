@@ -1,13 +1,17 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { cotizacionService } from '../services/cotizacionService';
+import { imprimirProformaOficial } from '../utils/printProforma';
 
 export default function CotizacionesList({ token }) {
   const [cotizaciones, setCotizaciones] = useState([]);
   const [cargando, setCargando] = useState(false);
+  const [procesandoId, setProcesandoId] = useState(null);
   const [error, setError] = useState('');
+  const [mensajeOk, setMensajeOk] = useState('');
   const [busqueda, setBusqueda] = useState('');
-  const [filtroVigencia, setFiltroVigencia] = useState(''); // '' | 'vigente' | 'vencida'
+  const [filtroEstado, setFiltroEstado] = useState(''); // '' | 'VIGENTE' | 'ALERTA_STOCK' | 'CONFIRMADA' | 'VENCIDA'
   const [cotizacionSeleccionada, setCotizacionSeleccionada] = useState(null);
+  const [cotizacionAlertaModal, setCotizacionAlertaModal] = useState(null);
 
   const cargar = async () => {
     try {
@@ -26,46 +30,49 @@ export default function CotizacionesList({ token }) {
     cargar();
   }, [token]);
 
-  // Filtrado reactivo en cliente
   const filtradas = useMemo(() => {
-    const ahora = new Date();
     return cotizaciones.filter(c => {
       const q = busqueda.trim().toLowerCase();
-      const matchText = (
+      const matchText =
+        !q ||
         (c.codigoCotizacion || '').toLowerCase().includes(q) ||
         (c.nombreCliente || '').toLowerCase().includes(q) ||
         (c.telefonoCliente || '').toLowerCase().includes(q) ||
-        (c.emailCliente || '').toLowerCase().includes(q)
-      );
+        (c.emailCliente || '').toLowerCase().includes(q) ||
+        (c.items || []).some(it => (it.nombreProducto || '').toLowerCase().includes(q));
 
       if (!matchText) return false;
 
-      const esVigente = new Date(c.fechaVencimiento) >= ahora;
-      if (filtroVigencia === 'vigente' && !esVigente) return false;
-      if (filtroVigencia === 'vencida' && esVigente) return false;
+      const est = c.estadoCotizacion || 'VIGENTE';
+      if (filtroEstado === 'VIGENTE' && est !== 'VIGENTE') return false;
+      if (filtroEstado === 'ALERTA_STOCK' && est !== 'VARIACION_STOCK' && est !== 'SIN_STOCK') return false;
+      if (filtroEstado === 'CONFIRMADA' && est !== 'CONFIRMADA') return false;
+      if (filtroEstado === 'VENCIDA' && est !== 'VENCIDA') return false;
 
       return true;
     });
-  }, [cotizaciones, busqueda, filtroVigencia]);
+  }, [cotizaciones, busqueda, filtroEstado]);
 
-  // Estadísticas rápidas
   const stats = useMemo(() => {
-    const ahora = new Date();
     let totalMonto = 0;
     let vigentes = 0;
+    let conAlertaStock = 0;
+    let confirmadas = 0;
 
     cotizaciones.forEach(c => {
       totalMonto += parseFloat(c.total || 0);
-      if (new Date(c.fechaVencimiento) >= ahora) {
-        vigentes++;
-      }
+      const est = c.estadoCotizacion || 'VIGENTE';
+      if (est === 'VIGENTE') vigentes++;
+      if (est === 'VARIACION_STOCK' || est === 'SIN_STOCK') conAlertaStock++;
+      if (est === 'CONFIRMADA') confirmadas++;
     });
 
     return {
       totalCount: cotizaciones.length,
       totalMonto: totalMonto.toFixed(2),
       vigentes,
-      vencidas: cotizaciones.length - vigentes
+      conAlertaStock,
+      confirmadas
     };
   }, [cotizaciones]);
 
@@ -73,9 +80,134 @@ export default function CotizacionesList({ token }) {
     const telLimpio = (c.telefonoCliente || '').replace(/\D/g, '');
     const num = telLimpio.startsWith('51') ? telLimpio : `51${telLimpio}`;
     const msg = encodeURIComponent(
-      `¡Hola ${c.nombreCliente}! Te saludamos de Leveling Jump. Te contactamos para dar seguimiento a tu cotización *${c.codigoCotizacion}* por S/ ${parseFloat(c.total).toFixed(2)}. ¿Tienes alguna consulta o deseas formalizar tu pedido antes de que venza?`
+      `¡Hola ${c.nombreCliente}! Te saludamos de Leveling Jump. Te contactamos respecto a tu cotización *${c.codigoCotizacion}* por S/ ${parseFloat(c.total).toFixed(2)}.`
     );
     window.open(`https://wa.me/${num}?text=${msg}`, '_blank');
+  };
+
+  const handleConfirmarORecalcular = async (cot, accion = 'confirmar') => {
+    try {
+      setProcesandoId(cot.id);
+      setError('');
+      setMensajeOk('');
+      const resp = await cotizacionService.confirmarORecalcular(cot.id, accion, token);
+      setMensajeOk(resp.mensaje || 'Cotización actualizada y recalculada correctamente.');
+      setCotizacionAlertaModal(null);
+      await cargar();
+    } catch (err) {
+      setError(err.message || 'No se pudo procesar la cotización.');
+    } finally {
+      setProcesandoId(null);
+    }
+  };
+
+  const handleEliminar = async (cot) => {
+    if (!window.confirm(`¿Deseas eliminar definitivamente la cotización ${cot.codigoCotizacion} de ${cot.nombreCliente}?`)) {
+      return;
+    }
+    try {
+      setProcesandoId(cot.id);
+      setError('');
+      setMensajeOk('');
+      const resp = await cotizacionService.eliminar(cot.id, token);
+      setMensajeOk(resp.mensaje || `Cotización ${cot.codigoCotizacion} eliminada.`);
+      setCotizacionAlertaModal(null);
+      if (cotizacionSeleccionada?.id === cot.id) setCotizacionSeleccionada(null);
+      try {
+        const cacheStr = localStorage.getItem('lj_mis_cotizaciones_cache');
+        if (cacheStr) {
+          const arr = JSON.parse(cacheStr).filter(x => x.codigoCotizacion !== cot.codigoCotizacion);
+          localStorage.setItem('lj_mis_cotizaciones_cache', JSON.stringify(arr));
+        }
+      } catch (_) {}
+      await cargar();
+    } catch (err) {
+      setError(err.message || 'Error al eliminar la cotización.');
+    } finally {
+      setProcesandoId(null);
+    }
+  };
+
+  const renderBadgeEstado = (c) => {
+    const est = c.estadoCotizacion || 'VIGENTE';
+    if (est === 'SIN_STOCK') {
+      return (
+        <span style={{
+          display: 'inline-block',
+          padding: '4px 8px',
+          borderRadius: '4px',
+          fontSize: '11px',
+          fontWeight: 800,
+          background: '#FEF2F2',
+          color: '#DC2626',
+          border: '1px solid #FCA5A5'
+        }}>
+          🚫 IMPOSIBLE COTIZAR (SIN STOCK)
+        </span>
+      );
+    }
+    if (est === 'VARIACION_STOCK') {
+      return (
+        <span style={{
+          display: 'inline-block',
+          padding: '4px 8px',
+          borderRadius: '4px',
+          fontSize: '11px',
+          fontWeight: 800,
+          background: '#FFFBEB',
+          color: '#D97706',
+          border: '1px solid #FCD34D'
+        }}>
+          ⚠️ VARIACIÓN DE STOCK
+        </span>
+      );
+    }
+    if (est === 'CONFIRMADA') {
+      return (
+        <span style={{
+          display: 'inline-block',
+          padding: '4px 8px',
+          borderRadius: '4px',
+          fontSize: '11px',
+          fontWeight: 800,
+          background: '#E0F2FE',
+          color: '#0284C7',
+          border: '1px solid #7DD3FC'
+        }}>
+          ✅ CONFIRMADA
+        </span>
+      );
+    }
+    if (est === 'VENCIDA') {
+      return (
+        <span style={{
+          display: 'inline-block',
+          padding: '4px 8px',
+          borderRadius: '4px',
+          fontSize: '11px',
+          fontWeight: 800,
+          background: '#F1F5F9',
+          color: '#64748B',
+          border: '1px solid #CBD5E1'
+        }}>
+          VENCIDA
+        </span>
+      );
+    }
+    return (
+      <span style={{
+        display: 'inline-block',
+        padding: '4px 8px',
+        borderRadius: '4px',
+        fontSize: '11px',
+        fontWeight: 800,
+        background: '#ECFDF5',
+        color: '#059669',
+        border: '1px solid #6EE7B7'
+      }}>
+        VIGENTE
+      </span>
+    );
   };
 
   return (
@@ -85,11 +217,11 @@ export default function CotizacionesList({ token }) {
         <div>
           <h2>Historial y Seguimiento de Cotizaciones</h2>
           <p className="muted">
-            Auditoría comercial de proformas emitidas, control de vigencia (7 días) y contacto directo con compradores.
+            Auditoría comercial de proformas emitidas, validación de stock en tiempo real, recálculo y confirmación.
           </p>
         </div>
         <button className="secondary" onClick={cargar} disabled={cargando}>
-          {cargando ? 'Actualizando...' : '🔄 Refrescar'}
+          {cargando ? 'Actualizando...' : '🔄 Refrescar Stock y Cotizaciones'}
         </button>
       </div>
 
@@ -113,16 +245,16 @@ export default function CotizacionesList({ token }) {
 
         <div style={{ background: '#0D1117', border: '1px solid #30363D', borderRadius: '8px', padding: '12px 16px' }}>
           <span style={{ fontSize: '11px', color: '#8B949E', textTransform: 'uppercase', letterSpacing: '0.8px', display: 'block', marginBottom: '4px' }}>
-            Cotizaciones Vigentes
+            Vigentes (Stock OK)
           </span>
           <strong style={{ fontSize: '20px', color: '#10B981' }}>{stats.vigentes}</strong>
         </div>
 
         <div style={{ background: '#0D1117', border: '1px solid #30363D', borderRadius: '8px', padding: '12px 16px' }}>
           <span style={{ fontSize: '11px', color: '#8B949E', textTransform: 'uppercase', letterSpacing: '0.8px', display: 'block', marginBottom: '4px' }}>
-            Cotizaciones Vencidas
+            Alertas de Stock / Agotados
           </span>
-          <strong style={{ fontSize: '20px', color: '#EF4444' }}>{stats.vencidas}</strong>
+          <strong style={{ fontSize: '20px', color: '#F59E0B' }}>{stats.conAlertaStock}</strong>
         </div>
       </div>
 
@@ -131,93 +263,192 @@ export default function CotizacionesList({ token }) {
         <input
           value={busqueda}
           onChange={e => setBusqueda(e.target.value)}
-          placeholder="Buscar por código COT, nombre de cliente o WhatsApp..."
+          placeholder="Buscar por código COT, cliente, WhatsApp o producto..."
           style={{ flex: 1, minWidth: '280px' }}
         />
-        <select value={filtroVigencia} onChange={e => setFiltroVigencia(e.target.value)}>
+        <select value={filtroEstado} onChange={e => setFiltroEstado(e.target.value)}>
           <option value="">Todas las cotizaciones</option>
-          <option value="vigente">Solo Vigentes (Precios activos)</option>
-          <option value="vencida">Solo Vencidas (+7 días)</option>
+          <option value="VIGENTE">🟢 Vigentes (Stock completo)</option>
+          <option value="ALERTA_STOCK">⚠️ Con Variación de Stock / Sin Stock</option>
+          <option value="CONFIRMADA">✅ Confirmadas</option>
+          <option value="VENCIDA">🔴 Vencidas (+7 días)</option>
         </select>
       </div>
 
       {error && <div className="alert err" style={{ marginBottom: '14px' }}>⚠️ {error}</div>}
+      {mensajeOk && <div className="alert ok" style={{ marginBottom: '14px' }}>✅ {mensajeOk}</div>}
 
       {/* Tabla de cotizaciones */}
       <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
           <thead>
-            <tr style={{ borderBottom: '2px solid #30363D', color: '#8B949E' }}>
+            <tr style={{ borderBottom: '2px solid #CBD5E1', color: '#334155', background: '#F8FAFC' }}>
               <th style={{ padding: '10px 8px' }}>Código</th>
               <th style={{ padding: '10px 8px' }}>Cliente / WhatsApp</th>
-              <th style={{ padding: '10px 8px' }}>Productos Cotizados</th>
+              <th style={{ padding: '10px 8px' }}>Productos Cotizados & Disponibilidad Actual</th>
               <th style={{ padding: '10px 8px' }}>Total</th>
-              <th style={{ padding: '10px 8px' }}>Emisión</th>
-              <th style={{ padding: '10px 8px' }}>Vencimiento</th>
+              <th style={{ padding: '10px 8px' }}>Emisión / Venc.</th>
               <th style={{ padding: '10px 8px' }}>Estado</th>
               <th style={{ padding: '10px 8px', textAlign: 'right' }}>Acciones</th>
             </tr>
           </thead>
           <tbody>
             {filtradas.map(c => {
-              const ahora = new Date();
-              const vence = new Date(c.fechaVencimiento);
-              const esVigente = vence >= ahora;
+              const est = c.estadoCotizacion || 'VIGENTE';
               const cantItems = (c.items || []).reduce((acc, it) => acc + (it.cantidad || 1), 0);
+              const enProceso = procesandoId === c.id;
 
               return (
-                <tr key={c.id} style={{ borderBottom: '1px solid #E2E8F0' }}>
-                  <td style={{ padding: '10px 8px', fontWeight: 'bold', color: '#0284C7', fontFamily: 'monospace' }}>
+                <tr
+                  key={c.id}
+                  style={{
+                    borderBottom: '1px solid #E2E8F0',
+                    background: est === 'SIN_STOCK' ? '#FFF5F5' : est === 'VARIACION_STOCK' ? '#FFFBEB' : '#FFFFFF'
+                  }}
+                >
+                  <td style={{ padding: '12px 8px', fontWeight: '800', color: '#0284C7', fontFamily: 'monospace' }}>
                     {c.codigoCotizacion}
                   </td>
-                  <td style={{ padding: '10px 8px' }}>
+                  <td style={{ padding: '12px 8px' }}>
                     <div style={{ fontWeight: '700', color: '#0F172A' }}>{c.nombreCliente}</div>
-                    <small style={{ color: '#475569' }}>📱 {c.telefonoCliente}</small>
+                    <small style={{ color: '#475569', display: 'block' }}>📱 {c.telefonoCliente}</small>
                     {c.emailCliente && (
                       <small style={{ color: '#64748B', display: 'block' }}>✉️ {c.emailCliente}</small>
                     )}
                   </td>
-                  <td style={{ padding: '10px 8px' }}>
-                    <div style={{ fontSize: '12.5px', color: '#1E293B', fontWeight: 500 }}>
-                      {(c.items || []).map(it => `${it.cantidad}x ${it.nombreProducto}`).join(', ')}
-                    </div>
+                  <td style={{ padding: '12px 8px' }}>
+                    {(c.items || []).map((it, idx) => (
+                      <div key={it.id || idx} style={{ marginBottom: '4px' }}>
+                        <span style={{ fontSize: '13px', color: '#0F172A', fontWeight: 700 }}>
+                          {it.cantidad}x {it.nombreProducto}
+                        </span>
+                        <span style={{ fontSize: '11.5px', color: '#475569', marginLeft: '6px' }}>
+                          (S/ {parseFloat(it.precioUnitario || 0).toFixed(2)} c/u)
+                        </span>
+                        {it.estadoStockItem === 'SIN_STOCK' && (
+                          <div style={{ fontSize: '11.5px', color: '#DC2626', fontWeight: 700, marginTop: '2px' }}>
+                            🚫 Imposible cotizar: No hay stock disponible (0 und. en almacén)
+                          </div>
+                        )}
+                        {it.estadoStockItem === 'VARIACION_STOCK' && (
+                          <div style={{ fontSize: '11.5px', color: '#D97706', fontWeight: 700, marginTop: '2px' }}>
+                            ⚠️ Variación de stock: Se redujo el stock de {it.cantidad} a {it.stockDisponibleActual} und. disponibles
+                          </div>
+                        )}
+                        {it.estadoStockItem === 'OK' && (
+                          <span style={{ fontSize: '11px', color: '#059669', fontWeight: 600, marginLeft: '8px' }}>
+                            · Stock OK ({it.stockDisponibleActual} disp.)
+                          </span>
+                        )}
+                      </div>
+                    ))}
                     <small style={{ color: '#64748B', fontSize: '11px' }}>
-                      ({cantItems} {cantItems === 1 ? 'artículo' : 'artículos'})
+                      ({cantItems} {cantItems === 1 ? 'artículo solicitado' : 'artículos solicitados'})
                     </small>
                   </td>
-                  <td style={{ padding: '10px 8px', fontWeight: 'bold', color: '#059669', fontFamily: 'monospace', fontSize: '13.5px' }}>
-                    S/ {parseFloat(c.total || 0).toFixed(2)}
+                  <td style={{ padding: '12px 8px', fontFamily: 'monospace' }}>
+                    {est === 'SIN_STOCK' ? (
+                      <div>
+                        <span style={{ textDecoration: 'line-through', color: '#94A3B8', fontSize: '12px', display: 'block' }}>
+                          S/ {parseFloat(c.total || 0).toFixed(2)}
+                        </span>
+                        <strong style={{ color: '#DC2626', fontSize: '12.5px' }}>Sin Stock (S/ 0.00)</strong>
+                      </div>
+                    ) : est === 'VARIACION_STOCK' ? (
+                      <div>
+                        <span style={{ textDecoration: 'line-through', color: '#94A3B8', fontSize: '12px', display: 'block' }}>
+                          S/ {parseFloat(c.total || 0).toFixed(2)}
+                        </span>
+                        <strong style={{ color: '#D97706', fontSize: '13.5px' }}>
+                          Nuevo: S/ {parseFloat(c.totalRecalculado || 0).toFixed(2)}
+                        </strong>
+                      </div>
+                    ) : (
+                      <strong style={{ color: '#059669', fontSize: '14px' }}>
+                        S/ {parseFloat(c.total || 0).toFixed(2)}
+                      </strong>
+                    )}
                   </td>
-                  <td style={{ padding: '10px 8px', color: '#475569', fontSize: '12px' }}>
-                    {new Date(c.fechaEmision).toLocaleDateString('es-PE')}
+                  <td style={{ padding: '12px 8px', color: '#334155', fontSize: '12px' }}>
+                    <div>Emitida: {new Date(c.fechaEmision).toLocaleDateString('es-PE')}</div>
+                    <div style={{ color: '#64748B', fontSize: '11px' }}>
+                      Vence: {new Date(c.fechaVencimiento).toLocaleDateString('es-PE')}
+                    </div>
                   </td>
-                  <td style={{ padding: '10px 8px', fontSize: '12px', fontWeight: 600, color: esVigente ? '#0F172A' : '#DC2626' }}>
-                    {new Date(c.fechaVencimiento).toLocaleDateString('es-PE')}
+                  <td style={{ padding: '12px 8px' }}>
+                    {renderBadgeEstado(c)}
                   </td>
-                  <td style={{ padding: '10px 8px' }}>
-                    <span style={{
-                      padding: '3px 8px',
-                      borderRadius: '4px',
-                      fontSize: '11px',
-                      fontWeight: 700,
-                      background: esVigente ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
-                      color: esVigente ? '#10B981' : '#EF4444',
-                      border: `1px solid ${esVigente ? '#10B981' : '#EF4444'}`
-                    }}>
-                      {esVigente ? 'VIGENTE' : 'VENCIDA'}
-                    </span>
-                  </td>
-                  <td style={{ padding: '10px 8px', textAlign: 'right' }}>
-                    <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+                  <td style={{ padding: '12px 8px', textAlign: 'right' }}>
+                    <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                      {est === 'VARIACION_STOCK' && (
+                        <button
+                          type="button"
+                          className="primary"
+                          disabled={enProceso}
+                          style={{
+                            padding: '5px 10px',
+                            fontSize: '11.5px',
+                            background: '#F59E0B',
+                            color: '#0F172A',
+                            fontWeight: 800,
+                            cursor: 'pointer'
+                          }}
+                          onClick={() => setCotizacionAlertaModal(c)}
+                          title="Revisar variación de stock y recalcular total antes de confirmar"
+                        >
+                          🔄 Recalcular / Confirmar
+                        </button>
+                      )}
+
+                      {est === 'VIGENTE' && (
+                        <button
+                          type="button"
+                          className="primary"
+                          disabled={enProceso}
+                          style={{
+                            padding: '5px 10px',
+                            fontSize: '11.5px',
+                            background: '#0284C7',
+                            color: '#FFFFFF',
+                            fontWeight: 700,
+                            cursor: 'pointer'
+                          }}
+                          onClick={() => handleConfirmarORecalcular(c, 'confirmar')}
+                          title="Confirmar cotización con stock verificado"
+                        >
+                          ✅ Confirmar
+                        </button>
+                      )}
+
+                      {est === 'SIN_STOCK' && (
+                        <button
+                          type="button"
+                          className="secondary"
+                          style={{
+                            padding: '5px 10px',
+                            fontSize: '11.5px',
+                            borderColor: '#EF4444',
+                            color: '#DC2626',
+                            fontWeight: 700,
+                            cursor: 'pointer'
+                          }}
+                          onClick={() => setCotizacionAlertaModal(c)}
+                          title="Ver detalle de falta de stock"
+                        >
+                          ⚠️ Ver Alerta
+                        </button>
+                      )}
+
                       <button
                         type="button"
                         className="secondary"
                         style={{ padding: '5px 10px', fontSize: '11.5px', cursor: 'pointer' }}
                         onClick={() => setCotizacionSeleccionada(c)}
-                        title="Ver proforma oficial descargable"
+                        title="Ver e imprimir proforma oficial"
                       >
-                        📄 Ver Proforma
+                        📄 Proforma
                       </button>
+
                       <button
                         type="button"
                         className="primary"
@@ -232,7 +463,24 @@ export default function CotizacionesList({ token }) {
                         onClick={() => handleWhatsAppContact(c)}
                         title="Contactar al cliente por WhatsApp"
                       >
-                        💬 Contactar
+                        💬 WhatsApp
+                      </button>
+
+                      <button
+                        type="button"
+                        className="secondary"
+                        disabled={enProceso}
+                        style={{
+                          padding: '5px 10px',
+                          fontSize: '11.5px',
+                          borderColor: '#FCA5A5',
+                          color: '#DC2626',
+                          cursor: 'pointer'
+                        }}
+                        onClick={() => handleEliminar(c)}
+                        title="Eliminar esta cotización"
+                      >
+                        🗑️ Eliminar
                       </button>
                     </div>
                   </td>
@@ -248,6 +496,104 @@ export default function CotizacionesList({ token }) {
           </p>
         )}
       </div>
+
+      {/* Modal de Advertencia de Disponibilidad / Recálculo (Escenario 3) */}
+      {cotizacionAlertaModal && (
+        <div className="modal-overlay" onClick={() => setCotizacionAlertaModal(null)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '580px' }}>
+            <div className="modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span style={{ fontSize: '24px' }}>{cotizacionAlertaModal.todosSinStock ? '🚫' : '⚠️'}</span>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.15rem', color: cotizacionAlertaModal.todosSinStock ? '#EF4444' : '#F59E0B' }}>
+                    {cotizacionAlertaModal.todosSinStock
+                      ? 'IMPOSIBLE COTIZAR: PRODUCTO SIN STOCK'
+                      : 'ADVERTENCIA: VARIACIÓN DE STOCK DISPONIBLE'}
+                  </h3>
+                  <small style={{ color: '#8B949E', fontSize: '11px' }}>
+                    Verificación de inventario antes de calcular el total ({cotizacionAlertaModal.codigoCotizacion})
+                  </small>
+                </div>
+              </div>
+              <button className="modal-close-btn" onClick={() => setCotizacionAlertaModal(null)}>&times;</button>
+            </div>
+
+            <div style={{ background: '#0D1117', border: '1px solid #30363D', borderRadius: '8px', padding: '14px', marginBottom: '16px' }}>
+              <p style={{ margin: '0 0 10px', fontSize: '13px', color: '#E2E8F0', lineHeight: 1.45 }}>
+                El stock físico en almacén cambió desde que se solicitó esta cotización debido a ventas o reservas entregadas:
+              </p>
+              <ul style={{ margin: 0, paddingLeft: '18px', color: '#FCD34D', fontSize: '12.5px', lineHeight: 1.6 }}>
+                {(cotizacionAlertaModal.alertasStock || []).map((al, i) => (
+                  <li key={i} style={{ color: al.includes('Imposible') ? '#F87171' : '#FBBF24', fontWeight: 600 }}>
+                    {al}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {!cotizacionAlertaModal.todosSinStock ? (
+              <div className="reserva-breakdown" style={{ marginBottom: '16px' }}>
+                <div className="reserva-breakdown-row">
+                  <span>Total Original Cotizado:</span>
+                  <span style={{ textDecoration: 'line-through', color: '#8B949E' }}>
+                    S/ {parseFloat(cotizacionAlertaModal.total || 0).toFixed(2)}
+                  </span>
+                </div>
+                <div className="reserva-breakdown-row" style={{ color: 'var(--color-cyan)', fontSize: '15px' }}>
+                  <span>Nuevo Total Calculado según Stock Real:</span>
+                  <strong>S/ {parseFloat(cotizacionAlertaModal.totalRecalculado || 0).toFixed(2)}</strong>
+                </div>
+              </div>
+            ) : (
+              <div className="alert err" style={{ marginBottom: '16px' }}>
+                🚫 No quedan unidades disponibles para ninguno de los artículos de esta cotización. No es posible confirmar ni calcular un nuevo total; se recomienda eliminar la cotización.
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              {!cotizacionAlertaModal.todosSinStock && (
+                <>
+                  <button
+                    type="button"
+                    className="primary"
+                    disabled={procesandoId === cotizacionAlertaModal.id}
+                    onClick={() => handleConfirmarORecalcular(cotizacionAlertaModal, 'recalcular')}
+                    style={{ flex: 1, padding: '10px', background: '#F59E0B', color: '#0F172A', fontWeight: 800 }}
+                  >
+                    🔄 Actualizar Stock y Recalcular (S/ {parseFloat(cotizacionAlertaModal.totalRecalculado || 0).toFixed(2)})
+                  </button>
+                  <button
+                    type="button"
+                    className="primary"
+                    disabled={procesandoId === cotizacionAlertaModal.id}
+                    onClick={() => handleConfirmarORecalcular(cotizacionAlertaModal, 'confirmar')}
+                    style={{ flex: 1, padding: '10px', background: '#10B981', color: '#0F172A', fontWeight: 800 }}
+                  >
+                    ✅ Recalcular y Confirmar
+                  </button>
+                </>
+              )}
+              <button
+                type="button"
+                className="secondary"
+                disabled={procesandoId === cotizacionAlertaModal.id}
+                onClick={() => handleEliminar(cotizacionAlertaModal)}
+                style={{ padding: '10px 16px', borderColor: '#EF4444', color: '#F87171', fontWeight: 700 }}
+              >
+                🗑️ Eliminar Cotización
+              </button>
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => setCotizacionAlertaModal(null)}
+                style={{ padding: '10px 16px' }}
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal flotante de Hoja de Cotización Oficial */}
       {cotizacionSeleccionada && (
@@ -265,6 +611,17 @@ export default function CotizacionesList({ token }) {
               </div>
               <button className="modal-close-btn" onClick={() => setCotizacionSeleccionada(null)}>&times;</button>
             </div>
+
+            {cotizacionSeleccionada.alertasStock?.length > 0 && (
+              <div className="alert err" style={{ marginBottom: '12px' }}>
+                <strong>⚠️ Aviso de Disponibilidad en Almacén:</strong>
+                <ul style={{ margin: '4px 0 0', paddingLeft: '18px', fontSize: '12px' }}>
+                  {cotizacionSeleccionada.alertasStock.map((al, idx) => (
+                    <li key={idx}>{al}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             {/* Documento oficial imprimible */}
             <div
@@ -350,7 +707,7 @@ export default function CotizacionesList({ token }) {
               <button
                 type="button"
                 className="secondary"
-                onClick={() => window.print()}
+                onClick={() => imprimirProformaOficial(cotizacionSeleccionada)}
                 style={{ flex: 1, padding: '10px' }}
               >
                 🖨️ Imprimir / Guardar PDF
@@ -361,7 +718,7 @@ export default function CotizacionesList({ token }) {
                 onClick={() => handleWhatsAppContact(cotizacionSeleccionada)}
                 style={{ flex: 1, padding: '10px', background: '#25D366', color: '#000000', fontWeight: 'bold' }}
               >
-                💬 Contactar por WhatsApp
+                💬 Enviar por WhatsApp
               </button>
               <button
                 type="button"

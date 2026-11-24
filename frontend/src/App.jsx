@@ -723,6 +723,7 @@ export default function App() {
         setCart={setCarrito}
         onClearCart={clearCart}
         usuarioActual={usuario}
+        productos={productos}
         initialMode={cartInitialMode}
         onReservaExitosa={() => {
           load();

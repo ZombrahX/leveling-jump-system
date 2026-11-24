@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { cotizacionService } from '../services/cotizacionService';
 import { reservaService } from '../services/reservaService';
+import { obtenerProductos } from '../services/productService';
+import { imprimirProformaOficial } from '../utils/printProforma';
 
 export default function CartAndQuotationModal({
   isOpen,
@@ -9,6 +11,7 @@ export default function CartAndQuotationModal({
   setCart,
   onClearCart,
   usuarioActual,
+  productos = [],
   onReservaExitosa,
   initialMode = 'reserva' // 'reserva' o 'cotizacion'
 }) {
@@ -36,8 +39,96 @@ export default function CartAndQuotationModal({
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState('');
   const [exito, setExito] = useState('');
+  const [productosFrescos, setProductosFrescos] = useState([]);
 
-  const esStaff = usuarioActual && (usuarioActual.rol === 'ADMIN' || usuarioActual.rol === 'OPERADOR' || usuarioActual.rol === 'VENDEDOR');
+  const esStaff = usuarioActual && (usuarioActual.rol === 'SUPERADMIN' || usuarioActual.rol === 'ADMIN' || usuarioActual.rol === 'OPERADOR' || usuarioActual.rol === 'VENDEDOR');
+
+  // Consultar stock en tiempo real al abrir el carrito
+  useEffect(() => {
+    if (isOpen) {
+      obtenerProductos({})
+        .then(lista => {
+          if (Array.isArray(lista)) setProductosFrescos(lista);
+        })
+        .catch(() => {});
+    }
+  }, [isOpen]);
+
+  const mapaStockReal = useMemo(() => {
+    const fuente = productosFrescos.length > 0 ? productosFrescos : productos;
+    const map = new Map();
+    (fuente || []).forEach(p => {
+      const disp = p.estado === 'INACTIVO' ? 0 : Number(p.unidadesDisponibles ?? p.stockDisponible ?? 0);
+      map.set(Number(p.id), disp);
+    });
+    return map;
+  }, [productos, productosFrescos]);
+
+  const alertasStockCarrito = useMemo(() => {
+    const alertas = [];
+    let haySinStock = false;
+    let hayVariacion = false;
+    let totalRecalculable = 0;
+
+    cart.forEach(item => {
+      const cant = Number(item.cantidad || 1);
+      const precio = parseFloat(item.precio || 0);
+      if (mapaStockReal.has(Number(item.id))) {
+        const stockDisp = mapaStockReal.get(Number(item.id));
+        if (stockDisp <= 0) {
+          haySinStock = true;
+          alertas.push({
+            id: item.id,
+            tipo: 'SIN_STOCK',
+            mensaje: `Imposible cotizar "${item.nombre}": Ya no hay stock disponible (0 und.).`
+          });
+        } else if (cant > stockDisp) {
+          hayVariacion = true;
+          totalRecalculable += precio * stockDisp;
+          alertas.push({
+            id: item.id,
+            tipo: 'VARIACION_STOCK',
+            stockDisp,
+            mensaje: `Variación de stock en "${item.nombre}": Seleccionaste ${cant} und., pero el stock actual se redujo a ${stockDisp} und.`
+          });
+        } else {
+          totalRecalculable += precio * cant;
+        }
+      } else {
+        totalRecalculable += precio * cant;
+      }
+    });
+
+    return {
+      alertas,
+      haySinStock,
+      hayVariacion,
+      tieneIncidencias: haySinStock || hayVariacion,
+      totalRecalculable: Math.round(totalRecalculable * 100) / 100
+    };
+  }, [cart, mapaStockReal]);
+
+  const handleAjustarCarritoAlStock = () => {
+    setCart(prev => {
+      const ajustado = prev
+        .map(item => {
+          if (!mapaStockReal.has(Number(item.id))) return item;
+          const stockDisp = mapaStockReal.get(Number(item.id));
+          if (stockDisp <= 0) return null;
+          if ((item.cantidad || 1) > stockDisp) {
+            return { ...item, cantidad: stockDisp };
+          }
+          return item;
+        })
+        .filter(Boolean);
+      try {
+        localStorage.setItem('lj_carrito_comercial', JSON.stringify(ajustado));
+      } catch (_) {}
+      return ajustado;
+    });
+    setError('');
+    setExito('Cantidades ajustadas al stock disponible y total recalculado.');
+  };
 
   // Expandir los ítems del carrito según la cantidad para calcular políticas unitarias de reserva
   const itemsExpandidos = useMemo(() => {
@@ -242,6 +333,7 @@ export default function CartAndQuotationModal({
         nombreCliente: nombre.trim(),
         telefonoCliente: telefono.trim(),
         emailCliente: emailFinal,
+        idUsuario: usuarioActual?.id || null,
         observaciones: observaciones ? observaciones.trim() : '',
         items: cart.map(i => ({ idProducto: i.id, cantidad: i.cantidad || 1 }))
       };
@@ -260,6 +352,11 @@ export default function CartAndQuotationModal({
       } catch (_) {}
     } catch (err) {
       setError(err.message || 'Error al generar la cotización.');
+      obtenerProductos({})
+        .then(lista => {
+          if (Array.isArray(lista)) setProductosFrescos(lista);
+        })
+        .catch(() => {});
     } finally {
       setCargando(false);
     }
@@ -450,68 +547,125 @@ export default function CartAndQuotationModal({
             ) : (
               <div>
                 {/* 1. LISTADO DE PRODUCTOS DEL CARRITO */}
-                <div style={{ maxHeight: '200px', overflowY: 'auto', marginBottom: '14px', border: '1px solid #30363D', borderRadius: '8px', background: '#0D1117', padding: '8px' }}>
-                  {cart.map(item => (
-                    <div
-                      key={item.id}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        gap: '12px',
-                        padding: '8px 10px',
-                        borderBottom: '1px solid #21262D'
-                      }}
-                    >
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <h5 style={{ margin: 0, fontSize: '13px', color: '#FFFFFF', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {item.nombre}
-                        </h5>
-                        <small style={{ color: 'var(--color-cyan)', fontSize: '11px', fontFamily: 'monospace' }}>
-                          S/ {parseFloat(item.precio || 0).toFixed(2)} c/u
-                        </small>
-                      </div>
+                <div style={{ maxHeight: '220px', overflowY: 'auto', marginBottom: '14px', border: '1px solid #30363D', borderRadius: '8px', background: '#0D1117', padding: '8px' }}>
+                  {cart.map(item => {
+                    const stockReal = mapaStockReal.has(Number(item.id)) ? mapaStockReal.get(Number(item.id)) : null;
+                    const sinStock = stockReal !== null && stockReal <= 0;
+                    const stockInsuficiente = stockReal !== null && stockReal > 0 && (item.cantidad || 1) > stockReal;
 
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        {/* Selector de cantidad */}
-                        <div style={{ display: 'flex', alignItems: 'center', background: '#161B22', border: '1px solid #30363D', borderRadius: '6px' }}>
-                          <button
-                            type="button"
-                            onClick={() => handleUpdateCantidad(item.id, -1)}
-                            style={{ background: 'transparent', border: 'none', color: '#C9D1D9', padding: '4px 8px', cursor: 'pointer', fontWeight: 'bold' }}
-                          >
-                            -
-                          </button>
-                          <span style={{ padding: '0 8px', fontSize: '13px', fontWeight: 'bold', color: '#FFFFFF' }}>
-                            {item.cantidad || 1}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => handleUpdateCantidad(item.id, 1)}
-                            style={{ background: 'transparent', border: 'none', color: '#C9D1D9', padding: '4px 8px', cursor: 'pointer', fontWeight: 'bold' }}
-                          >
-                            +
-                          </button>
+                    return (
+                      <div
+                        key={item.id}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: '12px',
+                          padding: '8px 10px',
+                          borderBottom: '1px solid #21262D',
+                          background: sinStock ? 'rgba(239, 68, 68, 0.12)' : stockInsuficiente ? 'rgba(245, 158, 11, 0.12)' : 'transparent'
+                        }}
+                      >
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <h5 style={{ margin: 0, fontSize: '13px', color: '#FFFFFF', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {item.nombre}
+                          </h5>
+                          <small style={{ color: 'var(--color-cyan)', fontSize: '11px', fontFamily: 'monospace' }}>
+                            S/ {parseFloat(item.precio || 0).toFixed(2)} c/u
+                          </small>
+                          {sinStock && (
+                            <div style={{ color: '#F87171', fontSize: '11px', fontWeight: 700, marginTop: '2px' }}>
+                              🚫 Sin stock disponible (0 und.) — Imposible cotizar
+                            </div>
+                          )}
+                          {stockInsuficiente && (
+                            <div style={{ color: '#FBBF24', fontSize: '11px', fontWeight: 700, marginTop: '2px' }}>
+                              ⚠️ Variación de stock: solo quedan {stockReal} und. disponibles
+                            </div>
+                          )}
                         </div>
 
-                        {/* Subtotal */}
-                        <strong style={{ fontSize: '13px', color: '#10B981', minWidth: '85px', textAlign: 'right', fontFamily: 'monospace' }}>
-                          S/ {(parseFloat(item.precio || 0) * (item.cantidad || 1)).toFixed(2)}
-                        </strong>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          {/* Selector de cantidad */}
+                          <div style={{ display: 'flex', alignItems: 'center', background: '#161B22', border: '1px solid #30363D', borderRadius: '6px' }}>
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateCantidad(item.id, -1)}
+                              style={{ background: 'transparent', border: 'none', color: '#C9D1D9', padding: '4px 8px', cursor: 'pointer', fontWeight: 'bold' }}
+                            >
+                              -
+                            </button>
+                            <span style={{ padding: '0 8px', fontSize: '13px', fontWeight: 'bold', color: '#FFFFFF' }}>
+                              {item.cantidad || 1}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateCantidad(item.id, 1)}
+                              style={{ background: 'transparent', border: 'none', color: '#C9D1D9', padding: '4px 8px', cursor: 'pointer', fontWeight: 'bold' }}
+                            >
+                              +
+                            </button>
+                          </div>
 
-                        {/* Botón eliminar */}
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveItem(item.id)}
-                          style={{ background: 'transparent', border: 'none', color: '#EF4444', cursor: 'pointer', padding: '4px 6px', fontSize: '14px' }}
-                          title="Quitar del carrito"
-                        >
-                          ✕
-                        </button>
+                          {/* Subtotal */}
+                          <strong style={{ fontSize: '13px', color: '#10B981', minWidth: '85px', textAlign: 'right', fontFamily: 'monospace' }}>
+                            S/ {(parseFloat(item.precio || 0) * (item.cantidad || 1)).toFixed(2)}
+                          </strong>
+
+                          {/* Botón eliminar */}
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveItem(item.id)}
+                            style={{ background: 'transparent', border: 'none', color: '#EF4444', cursor: 'pointer', padding: '4px 6px', fontSize: '14px' }}
+                            title="Quitar del carrito"
+                          >
+                            ✕
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
+
+                {/* Alerta Escenario 3 antes de calcular el total / confirmar la cotización */}
+                {alertasStockCarrito.tieneIncidencias && (
+                  <div style={{
+                    background: 'rgba(245, 158, 11, 0.14)',
+                    border: '1px solid #F59E0B',
+                    borderRadius: '8px',
+                    padding: '12px 14px',
+                    marginBottom: '14px',
+                    fontSize: '12.5px',
+                    color: '#FDE68A'
+                  }}>
+                    <strong style={{ display: 'block', marginBottom: '4px', color: '#FBBF24' }}>
+                      ⚠️ Advertencia de Disponibilidad antes de calcular el total:
+                    </strong>
+                    <ul style={{ margin: '0 0 10px', paddingLeft: '18px', lineHeight: 1.5 }}>
+                      {alertasStockCarrito.alertas.map((al, idx) => (
+                        <li key={idx} style={{ color: al.tipo === 'SIN_STOCK' ? '#FCA5A5' : '#FDE68A' }}>
+                          {al.mensaje}
+                        </li>
+                      ))}
+                    </ul>
+                    <button
+                      type="button"
+                      className="primary"
+                      onClick={handleAjustarCarritoAlStock}
+                      style={{
+                        width: '100%',
+                        padding: '8px 12px',
+                        fontSize: '12.5px',
+                        fontWeight: 800,
+                        background: '#F59E0B',
+                        color: '#0F172A',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      🔄 Ajustar al Stock Disponible y Recalcular Total (S/ {alertasStockCarrito.totalRecalculable.toFixed(2)})
+                    </button>
+                  </div>
+                )}
 
                 {/* Resumen de totales */}
                 <div className="reserva-breakdown" style={{ marginBottom: '14px' }}>
@@ -797,10 +951,21 @@ export default function CartAndQuotationModal({
                     <button
                       type="submit"
                       className="primary"
-                      disabled={cargando}
-                      style={{ width: '100%', padding: '12px', fontSize: '14px', fontWeight: 'bold' }}
+                      disabled={cargando || alertasStockCarrito.tieneIncidencias}
+                      style={{
+                        width: '100%',
+                        padding: '12px',
+                        fontSize: '14px',
+                        fontWeight: 'bold',
+                        opacity: alertasStockCarrito.tieneIncidencias ? 0.55 : 1,
+                        cursor: alertasStockCarrito.tieneIncidencias ? 'not-allowed' : 'pointer'
+                      }}
                     >
-                      {cargando ? 'Generando Cotización...' : `📄 Generar Cotización Oficial (S/ ${totalCompra.toFixed(2)})`}
+                      {cargando
+                        ? 'Generando Cotización...'
+                        : alertasStockCarrito.tieneIncidencias
+                        ? '⚠️ Ajusta el stock disponible arriba antes de calcular el total'
+                        : `📄 Generar Cotización Oficial (S/ ${totalCompra.toFixed(2)})`}
                     </button>
                   </form>
                 )}
@@ -913,7 +1078,7 @@ export default function CartAndQuotationModal({
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
               <button
                 type="button"
-                onClick={() => window.print()}
+                onClick={() => imprimirProformaOficial(cotizacionGenerada)}
                 className="secondary"
                 style={{ flex: 1, padding: '10px', fontSize: '13px' }}
               >

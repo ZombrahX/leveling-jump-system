@@ -258,23 +258,34 @@ const actualizarEstadoReserva = async (req, res) => {
         throw err;
       }
 
-      // HU10-P02 & HU-06: Bloquear cancelaciones de pedidos ya entregados
-      if (estadoReserva === 'CANCELADA' && reserva.estadoReserva === 'ENTREGADA') {
-        const err = new Error('No se puede cancelar una reserva que ya fue formalmente ENTREGADA al cliente.');
+      // 1. Estados finales inmutables: una reserva ENTREGADA o CANCELADA no puede cambiar a otro estado
+      if (reserva.estadoReserva === 'ENTREGADA' || reserva.estadoEntrega === 'ENTREGADO') {
+        if (estadoReserva !== 'ENTREGADA') {
+          const err = new Error('Operación inválida: Un pedido que ya fue ENTREGADO es definitivo y no puede regresar a Pendiente, Confirmada ni Cancelada.');
+          err.statusCode = 400;
+          throw err;
+        }
+      }
+
+      if (reserva.estadoReserva === 'CANCELADA') {
+        if (estadoReserva !== 'CANCELADA') {
+          const err = new Error('Operación inválida: Una reserva CANCELADA ya liberó su unidad física y no puede reactivarse.');
+          err.statusCode = 400;
+          throw err;
+        }
+      }
+
+      // 2. Impedir retroceder de CONFIRMADA a PENDIENTE si ya tiene adelanto/abonos registrados
+      if (estadoReserva === 'PENDIENTE' && (reserva.estadoReserva === 'CONFIRMADA' || parseFloat(reserva.montoAdelanto || 0) > 0)) {
+        const err = new Error('Operación inválida: No se puede regresar a PENDIENTE una reserva que ya está confirmada o tiene abonos registrados.');
         err.statusCode = 400;
         throw err;
       }
 
-      // HU10-P02: Impedir entregas sin una unidad física válida y verificar vinculación
+      // 3. Transición a ENTREGADA: sincronizar unidad física a VENDIDO (tolerando si ya estaba en VENDIDO por actualización previa de entrega)
       if (estadoReserva === 'ENTREGADA') {
         if (!reserva.idUnidad) {
           const err = new Error('No se puede entregar una reserva que no cuenta con una unidad física asignada.');
-          err.statusCode = 400;
-          throw err;
-        }
-
-        if (reserva.estadoReserva === 'CANCELADA' || reserva.estadoReserva === 'EXPIRADA') {
-          const err = new Error(`No se puede entregar una reserva que se encuentra ${reserva.estadoReserva}.`);
           err.statusCode = 400;
           throw err;
         }
@@ -289,21 +300,21 @@ const actualizarEstadoReserva = async (req, res) => {
           throw err;
         }
 
-        if (unidadActual.estadoStock !== 'RESERVADO') {
+        if (unidadActual.estadoStock === 'RESERVADO') {
+          const asignacion = await tx.inventarioUnidad.updateMany({
+            where: { id: reserva.idUnidad, estadoStock: 'RESERVADO' },
+            data: { estadoStock: 'VENDIDO' }
+          });
+
+          if (asignacion.count === 0) {
+            const err = new Error('Conflicto de inventario: La unidad física ya no se encuentra en estado RESERVADO.');
+            err.statusCode = 409;
+            throw err;
+          }
+        } else if (unidadActual.estadoStock !== 'VENDIDO') {
           const err = new Error(
-            `Inconsistencia de inventario: La unidad física (Serie: ${unidadActual.codigoSerie}) se encuentra en estado "${unidadActual.estadoStock}" y no en RESERVADO.`
+            `Inconsistencia de inventario: La unidad física (Serie: ${unidadActual.codigoSerie}) se encuentra en estado "${unidadActual.estadoStock}".`
           );
-          err.statusCode = 409;
-          throw err;
-        }
-
-        const asignacion = await tx.inventarioUnidad.updateMany({
-          where: { id: reserva.idUnidad, estadoStock: 'RESERVADO' },
-          data: { estadoStock: 'VENDIDO' }
-        });
-
-        if (asignacion.count === 0) {
-          const err = new Error('Conflicto de inventario: La unidad física ya no se encuentra en estado RESERVADO.');
           err.statusCode = 409;
           throw err;
         }
@@ -629,11 +640,11 @@ const consultarSeguimientoPublico = async (req, res) => {
       });
     }
 
-    // Modalidad legible para el cliente
+    // Modalidad legible para el cliente (sin paréntesis redundantes)
     const modalidadesTexto = {
-      RETIRO_FERIA: '🎪 Entrega Presencial (Feria / Estación de Tren / Punto Acordado)',
-      RETIRO_TIENDA: '🏪 Retiro Presencial en Almacén / Tienda',
-      ENVIO_LIMA: '🚕 Envío Local (Taxi / Auto Privado / Motorizado / Courier)',
+      RETIRO_FERIA: '🎪 Entrega Presencial',
+      RETIRO_TIENDA: '🏪 Retiro en Almacén / Tienda',
+      ENVIO_LIMA: '🚕 Envío Local',
       ENVIO_PROVINCIA: '📦 Envío por Agencia / Courier'
     };
 
@@ -696,11 +707,20 @@ const actualizarEstadoEntrega = async (req, res) => {
       });
     }
 
-    // HU10-P04: Validar fecha estimada de entrega
+    // HU10-P04: Validar fecha estimada de entrega (formato válido y no anterior a la fecha actual)
     if (fechaEstimadaEntrega) {
       const fParsed = new Date(fechaEstimadaEntrega);
       if (isNaN(fParsed.getTime())) {
         return res.status(400).json({ error: 'La fecha estimada de entrega proporcionada no es válida.' });
+      }
+      // Comparar por cadena YYYY-MM-DD en zona horaria Perú (UTC-5) para impedir fechas pasadas
+      const fechaInputYMD = String(fechaEstimadaEntrega).slice(0, 10);
+      const ahoraPeru = new Date(Date.now() - 5 * 60 * 60 * 1000);
+      const hoyPeruYMD = ahoraPeru.toISOString().slice(0, 10);
+      if (/^\d{4}-\d{2}-\d{2}$/.test(fechaInputYMD) && fechaInputYMD < hoyPeruYMD) {
+        return res.status(400).json({
+          error: 'La fecha estimada de entrega no puede ser anterior al día de hoy.'
+        });
       }
     }
 
@@ -710,6 +730,13 @@ const actualizarEstadoEntrega = async (req, res) => {
     if (fechaEstimadaEntrega !== undefined) dataToUpdate.fechaEstimadaEntrega = fechaEstimadaEntrega ? new Date(fechaEstimadaEntrega) : null;
     if (guiaCourier !== undefined) dataToUpdate.guiaCourier = guiaCourier ? guiaCourier.trim() : null;
     if (direccionEntrega !== undefined) dataToUpdate.direccionEntrega = direccionEntrega ? direccionEntrega.trim() : null;
+
+    const ORDEN_ETAPAS_ENTREGA = {
+      PENDIENTE_PREPARACION: 1,
+      LISTO_PARA_ENTREGA: 2,
+      EN_TRANSITO: 3,
+      ENTREGADO: 4
+    };
 
     // Si la entrega pasa a ENTREGADO, sincronizar inventario si aún no está vendido
     const resultado = await prisma.$transaction(async (tx) => {
@@ -730,42 +757,42 @@ const actualizarEstadoEntrega = async (req, res) => {
         throw err;
       }
 
-      // HU10-P03: Evitar transiciones inválidas desde ENTREGADO
-      if (reserva.estadoEntrega === 'ENTREGADO' && estadoEntrega && estadoEntrega !== 'ENTREGADO') {
-        const err = new Error('Operación inválida: El pedido ya fue registrado como ENTREGADO. No se puede revertir el estado de entrega.');
-        err.statusCode = 400;
-        throw err;
+      // HU10-P03: Impedir retroceder a cualquier etapa anterior de entrega
+      if (estadoEntrega && reserva.estadoEntrega) {
+        const etapaActualNum = ORDEN_ETAPAS_ENTREGA[reserva.estadoEntrega] || 1;
+        const etapaNuevaNum = ORDEN_ETAPAS_ENTREGA[estadoEntrega] || 1;
+        if (etapaNuevaNum < etapaActualNum) {
+          const err = new Error(
+            reserva.estadoEntrega === 'ENTREGADO'
+              ? 'Operación inválida: El pedido ya fue registrado como ENTREGADO. No se puede revertir el estado de entrega.'
+              : 'Operación inválida: No se puede retroceder el estado de entrega a una etapa anterior.'
+          );
+          err.statusCode = 400;
+          throw err;
+        }
       }
 
       if (estadoEntrega === 'ENTREGADO') {
         dataToUpdate.estadoReserva = 'ENTREGADA';
-        // HU10: Impedir entrega sin unidad física válida
         if (!reserva.idUnidad) {
           const err = new Error('No se puede entregar una reserva que no cuenta con una unidad física asignada.');
           err.statusCode = 400;
           throw err;
         }
 
-        // HU10-P02 & P07: Comprobar explícitamente el estado y vinculación vigente de la unidad física
         const unidadActual = await tx.inventarioUnidad.findUnique({
           where: { id: reserva.idUnidad }
         });
 
-          if (!unidadActual) {
-            const err = new Error('La unidad física asignada a esta reserva ya no existe en el inventario.');
-            err.statusCode = 409;
-            throw err;
-          }
+        if (!unidadActual) {
+          const err = new Error('La unidad física asignada a esta reserva ya no existe en el inventario.');
+          err.statusCode = 409;
+          throw err;
+        }
 
-          if (unidadActual.estadoStock !== 'RESERVADO') {
-            const err = new Error(
-              `Inconsistencia de inventario: La unidad física (Serie: ${unidadActual.codigoSerie}) se encuentra en estado "${unidadActual.estadoStock}" y no en RESERVADO. No se puede marcar como ENTREGADA una reserva cuya unidad física no está reservada.`
-            );
-            err.statusCode = 409;
-            throw err;
-          }
-
-          // Actualización atómica condicionada
+        // Si la unidad aún está en RESERVADO, pasarla atómicamente a VENDIDO.
+        // Si ya estaba en VENDIDO porque la entrega ya había sido marcada como ENTREGADO antes, permitir actualizar datos sin error.
+        if (unidadActual.estadoStock === 'RESERVADO') {
           const asignacion = await tx.inventarioUnidad.updateMany({
             where: {
               id: reserva.idUnidad,
@@ -779,6 +806,13 @@ const actualizarEstadoEntrega = async (req, res) => {
             err.statusCode = 409;
             throw err;
           }
+        } else if (unidadActual.estadoStock !== 'VENDIDO') {
+          const err = new Error(
+            `Inconsistencia de inventario: La unidad física (Serie: ${unidadActual.codigoSerie}) se encuentra en estado "${unidadActual.estadoStock}".`
+          );
+          err.statusCode = 409;
+          throw err;
+        }
       }
 
       const actualizada = await tx.reserva.update({

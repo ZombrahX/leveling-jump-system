@@ -11,18 +11,26 @@ const MEDIOS_PAGO = [
 ];
 
 const MODALIDADES_ENTREGA = [
-  { id: 'RETIRO_FERIA', label: '🎪 Entrega Presencial (Feria / Tren / Punto Acordado)' },
-  { id: 'RETIRO_TIENDA', label: '🏪 Retiro Presencial en Almacén / Tienda' },
-  { id: 'ENVIO_LIMA', label: '🚕 Envío Local (Taxi / Auto Privado / Motorizado / Courier)' },
+  { id: 'RETIRO_FERIA', label: '🎪 Entrega Presencial' },
+  { id: 'RETIRO_TIENDA', label: '🏪 Retiro en Almacén / Tienda' },
+  { id: 'ENVIO_LIMA', label: '🚕 Envío Local' },
   { id: 'ENVIO_PROVINCIA', label: '📦 Envío por Agencia / Courier' }
 ];
 
 const ESTADOS_ENTREGA = [
-  { id: 'PENDIENTE_PREPARACION', label: '📦 En preparación en almacén' },
-  { id: 'LISTO_PARA_ENTREGA', label: '✅ Listo para recojo / entrega' },
-  { id: 'EN_TRANSITO', label: '🚚 En tránsito / Despachado' },
-  { id: 'ENTREGADO', label: '🎉 Entregado al cliente' }
+  { id: 'PENDIENTE_PREPARACION', label: '📦 En preparación en almacén', orden: 1 },
+  { id: 'LISTO_PARA_ENTREGA', label: '✅ Listo para recojo / entrega', orden: 2 },
+  { id: 'EN_TRANSITO', label: '🚚 En tránsito / Despachado', orden: 3 },
+  { id: 'ENTREGADO', label: '🎉 Entregado al cliente', orden: 4 }
 ];
+
+function obtenerHoyLocalISO() {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
 
 export default function ReservasList({ token }) {
   const [reservas, setReservas] = useState([]);
@@ -258,8 +266,9 @@ export default function ReservasList({ token }) {
           <tbody>
             {reservas.map(r => {
               const saldoNum = Number(r.saldoPendiente);
+              const tieneAbono = Number(r.montoAdelanto || 0) > 0;
               const cancelada = r.estadoReserva === 'CANCELADA';
-              const entregada = r.estadoReserva === 'ENTREGADA';
+              const entregada = r.estadoReserva === 'ENTREGADA' || r.estadoEntrega === 'ENTREGADO';
               const modObj = MODALIDADES_ENTREGA.find(m => m.id === r.modalidadEntrega);
               const estEntObj = ESTADOS_ENTREGA.find(e => e.id === r.estadoEntrega);
 
@@ -371,7 +380,7 @@ export default function ReservasList({ token }) {
                         </button>
                       )}
 
-                      {!cancelada && (
+                      {!cancelada && !entregada && (
                         <button
                           type="button"
                           onClick={() => abrirModalEntrega(r)}
@@ -391,16 +400,36 @@ export default function ReservasList({ token }) {
                         </button>
                       )}
 
-                      <select
-                        value={r.estadoReserva}
-                        onChange={e => handleCambiarEstado(r.id, e.target.value)}
-                        style={{ fontSize: '12px', padding: '4px 6px', background: '#0D1117', color: '#FFFFFF', border: '1px solid #30363D', borderRadius: '4px' }}
-                      >
-                        <option value="PENDIENTE">PENDIENTE</option>
-                        <option value="CONFIRMADA">CONFIRMADA</option>
-                        <option value="ENTREGADA">ENTREGADA</option>
-                        <option value="CANCELADA">CANCELADA</option>
-                      </select>
+                      {entregada || cancelada ? (
+                        <span
+                          style={{
+                            fontSize: '11.5px',
+                            padding: '4px 10px',
+                            background: '#1E293B',
+                            color: '#94A3B8',
+                            border: '1px solid #334155',
+                            borderRadius: '4px',
+                            fontWeight: 700,
+                            userSelect: 'none'
+                          }}
+                          title="Estado final cerrado"
+                        >
+                          🔒 {entregada ? 'ENTREGADA' : 'CANCELADA'}
+                        </span>
+                      ) : (
+                        <select
+                          value={r.estadoReserva}
+                          onChange={e => handleCambiarEstado(r.id, e.target.value)}
+                          style={{ fontSize: '12px', padding: '4px 6px', background: '#0D1117', color: '#FFFFFF', border: '1px solid #30363D', borderRadius: '4px' }}
+                        >
+                          {!tieneAbono && r.estadoReserva === 'PENDIENTE' && (
+                            <option value="PENDIENTE">PENDIENTE</option>
+                          )}
+                          <option value="CONFIRMADA">CONFIRMADA</option>
+                          <option value="ENTREGADA">ENTREGADA</option>
+                          <option value="CANCELADA">CANCELADA</option>
+                        </select>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -657,15 +686,21 @@ export default function ReservasList({ token }) {
                   onChange={e => setEstadoEntregaInput(e.target.value)}
                   style={{ marginTop: '4px', width: '100%' }}
                 >
-                  {ESTADOS_ENTREGA.map(e => (
-                    <option key={e.id} value={e.id}>{e.label}</option>
-                  ))}
+                  {(() => {
+                    const etapaActualObj = ESTADOS_ENTREGA.find(x => x.id === (reservaParaEntrega.estadoEntrega || 'PENDIENTE_PREPARACION'));
+                    const ordenActual = etapaActualObj ? etapaActualObj.orden : 1;
+                    return ESTADOS_ENTREGA.map(e => (
+                      <option key={e.id} value={e.id} disabled={e.orden < ordenActual}>
+                        {e.label}
+                      </option>
+                    ));
+                  })()}
                 </select>
               </label>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '12px' }}>
                 <label style={{ margin: 0 }}>
-                  Courier / Medio de Entrega (Opcional)
+                  Courier / Medio de Entrega
                   <input
                     type="text"
                     value={empresaCourierInput}
@@ -676,7 +711,7 @@ export default function ReservasList({ token }) {
                 </label>
 
                 <label style={{ margin: 0 }}>
-                  Código de Envío / Guía / Tracking (Opcional)
+                  Código de Envío / Guía / Tracking
                   <input
                     type="text"
                     value={guiaCourierInput}
@@ -692,6 +727,7 @@ export default function ReservasList({ token }) {
                   Fecha Estimada de Entrega
                   <input
                     type="date"
+                    min={obtenerHoyLocalISO()}
                     value={fechaEstimadaInput}
                     onChange={e => setFechaEstimadaInput(e.target.value)}
                     style={{ marginTop: '4px', width: '100%' }}
@@ -699,7 +735,7 @@ export default function ReservasList({ token }) {
                 </label>
 
                 <label style={{ margin: 0 }}>
-                  Dirección / Punto de Entrega (Opcional)
+                  Dirección / Punto de Entrega
                   <input
                     type="text"
                     value={direccionEntregaInput}

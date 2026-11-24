@@ -2,9 +2,9 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { reservaService } from '../services/reservaService';
 
 const MODALIDADES_TEXTO = {
-  RETIRO_FERIA: '🎪 Entrega Presencial (Feria / Estación de Tren / Punto Acordado)',
-  RETIRO_TIENDA: '🏪 Retiro Presencial en Almacén / Tienda',
-  ENVIO_LIMA: '🚕 Envío Local (Taxi / Auto Privado / Motorizado / Courier)',
+  RETIRO_FERIA: '🎪 Entrega Presencial',
+  RETIRO_TIENDA: '🏪 Retiro en Almacén / Tienda',
+  ENVIO_LIMA: '🚕 Envío Local',
   ENVIO_PROVINCIA: '📦 Envío por Agencia / Courier'
 };
 
@@ -119,7 +119,7 @@ export default function OrderTrackingModal({ token, usuarioActual, onExplorarCat
           type="text"
           value={busqueda}
           onChange={e => setBusqueda(e.target.value)}
-          placeholder="Filtrar tus pedidos por código (RES-...), producto, courier o código de envío..."
+          placeholder="Filtrar tus pedidos por código, producto, courier o código de envío..."
           style={{ flex: 1, minWidth: '260px' }}
         />
       </div>
@@ -128,7 +128,7 @@ export default function OrderTrackingModal({ token, usuarioActual, onExplorarCat
         {[
           { id: 'TODOS', label: 'Todos mis pedidos' },
           { id: 'EN_PROCESO', label: '📦 En preparación' },
-          { id: 'EN_RUTA', label: '🚚 Listos / En ruta (Con Courier o Transporte)' },
+          { id: 'EN_RUTA', label: '🚚 Listos / En ruta' },
           { id: 'ENTREGADO', label: '🎉 Entregados' }
         ].map(f => {
           const isActive = filtroEtapa === f.id;

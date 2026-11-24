@@ -40,7 +40,7 @@ export default function StoreSettings({ token, onConfigUpdated }) {
       );
       setConfigActual(actualizada);
       setWhatsappInput(actualizada.whatsappOficial);
-      setMensajeOk(actualizada.mensaje || 'Configuración guardada correctamente.');
+      setMensajeOk('Número de WhatsApp actualizado correctamente.');
       if (onConfigUpdated) onConfigUpdated(actualizada);
     } catch (err) {
       setError(err.message || 'No se pudo guardar la configuración.');
@@ -51,7 +51,7 @@ export default function StoreSettings({ token, onConfigUpdated }) {
 
   const handleProbarEnlace = () => {
     const num = configActual.whatsappCompleto || '51999999999';
-    const msg = encodeURIComponent('¡Hola Leveling Jump! Esta es una prueba del enlace oficial de atención al cliente.');
+    const msg = encodeURIComponent('¡Hola Leveling Jump! Prueba de enlace de atención al cliente.');
     window.open(`https://wa.me/${num}?text=${msg}`, '_blank', 'noopener,noreferrer');
   };
 
@@ -59,9 +59,9 @@ export default function StoreSettings({ token, onConfigUpdated }) {
     <section className="card" style={{ maxWidth: '860px', margin: '0 auto' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '20px' }}>
         <div>
-          <h2>Configuración General de Tienda</h2>
+          <h2>Configuración de Tienda</h2>
           <p className="muted" style={{ margin: '4px 0 0' }}>
-            Parámetros comerciales centralizados de Leveling Jump. Los cambios aplicados aquí se actualizan en tiempo real para todos los compradores.
+            Ajustes generales de contacto y atención al cliente de Leveling Jump.
           </p>
         </div>
       </div>
@@ -69,22 +69,20 @@ export default function StoreSettings({ token, onConfigUpdated }) {
       {error && <div className="alert err" style={{ marginBottom: '16px' }}>⚠️ {error}</div>}
       {mensajeOk && <div className="alert ok" style={{ marginBottom: '16px' }}>✅ {mensajeOk}</div>}
 
-      {/* Módulo 1: Canal Oficial de WhatsApp */}
       <div style={{
         background: '#F8FAFC',
         border: '1px solid #CBD5E1',
         borderLeft: '5px solid #10B981',
         borderRadius: '10px',
-        padding: '22px',
-        marginBottom: '20px'
+        padding: '22px'
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
           <div>
             <h3 style={{ margin: '0 0 4px', fontSize: '16px', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span>💬</span> Canal Oficial de WhatsApp de Atención y Ventas
+              <span>💬</span> WhatsApp de Atención y Ventas
             </h3>
             <p style={{ margin: 0, fontSize: '13px', color: '#475569' }}>
-              Este número recibe las confirmaciones de reservas del carrito, coordinación de entregas en Mis Reservas y consultas de Mis Cotizaciones, además de mostrarse en el encabezado de las Proformas PDF.
+              Número al que se dirigen los botones de coordinación en Reservas, Cotizaciones y el encabezado de las Proformas PDF.
             </p>
           </div>
           <span style={{
@@ -104,7 +102,7 @@ export default function StoreSettings({ token, onConfigUpdated }) {
         <form onSubmit={handleGuardar}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '16px', alignItems: 'end' }}>
             <label style={{ margin: 0, color: '#0F172A', fontWeight: 700, fontSize: '13px' }}>
-              Número Celular / WhatsApp Oficial (Perú +51)
+              Número de WhatsApp
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px' }}>
                 <span style={{
                   background: '#E2E8F0',
@@ -147,7 +145,7 @@ export default function StoreSettings({ token, onConfigUpdated }) {
                   cursor: 'pointer'
                 }}
               >
-                {guardando ? 'Guardando...' : '💾 Guardar Número Oficial'}
+                {guardando ? 'Guardando...' : '💾 Guardar Número'}
               </button>
 
               <button
@@ -167,27 +165,6 @@ export default function StoreSettings({ token, onConfigUpdated }) {
             </div>
           </div>
         </form>
-      </div>
-
-      {/* Bloque informativo de escalabilidad futura */}
-      <div style={{
-        background: '#F1F5F9',
-        border: '1px dashed #CBD5E1',
-        borderRadius: '10px',
-        padding: '16px 20px',
-        color: '#64748B',
-        fontSize: '12.5px',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '12px'
-      }}>
-        <span style={{ fontSize: '20px' }}>⚙️</span>
-        <div>
-          <strong style={{ color: '#334155', display: 'block', marginBottom: '2px' }}>
-            Módulo de Configuración Escalable
-          </strong>
-          Preparado para incorporar futuros parámetros globales de tienda (horarios de atención, cuentas Yape/Plin visibles en checkout, días de vigencia de proformas y políticas de campaña).
-        </div>
       </div>
     </section>
   );

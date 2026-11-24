@@ -16,12 +16,20 @@ const registrarInteres = async (req, res) => {
   try {
     const { idProducto, nombreCliente, telefonoCliente, emailCliente, notas } = req.body;
 
+    const esStaffOperador = req.usuario && ['SUPERADMIN', 'ADMIN'].includes(req.usuario.rol);
+    const nombreFinal = (!esStaffOperador && req.usuario?.nombre)
+      ? req.usuario.nombre.replace(/\s*\((Google|Local)\)/gi, '').trim()
+      : (nombreCliente ? nombreCliente.trim() : '');
+    const emailFinal = (!esStaffOperador && req.usuario?.email)
+      ? req.usuario.email.trim().toLowerCase()
+      : (emailCliente ? emailCliente.trim().toLowerCase() : null);
+
     const idProd = parseInt(idProducto);
     if (isNaN(idProd) || idProd <= 0) {
       return res.status(400).json({ error: 'ID de producto inválido.' });
     }
 
-    if (!nombreCliente || !nombreCliente.trim()) {
+    if (!nombreFinal) {
       return res.status(400).json({ error: 'El nombre del cliente es obligatorio.' });
     }
 
@@ -80,8 +88,8 @@ const registrarInteres = async (req, res) => {
       const interesReactivado = await prisma.interesProducto.update({
         where: { id: interesExistente.id },
         data: {
-          nombreCliente: nombreCliente.trim(),
-          emailCliente: emailCliente ? emailCliente.trim() : null,
+          nombreCliente: nombreFinal,
+          emailCliente: emailFinal,
           notas: notas ? notas.trim() : null,
           estado: 'PENDIENTE',
           fechaRegistro: new Date()
@@ -100,9 +108,9 @@ const registrarInteres = async (req, res) => {
     const nuevoInteres = await prisma.interesProducto.create({
       data: {
         idProducto: idProd,
-        nombreCliente: nombreCliente.trim(),
+        nombreCliente: nombreFinal,
         telefonoCliente: telLimpio,
-        emailCliente: emailCliente ? emailCliente.trim() : null,
+        emailCliente: emailFinal,
         notas: notas ? notas.trim() : null
       },
       include: {

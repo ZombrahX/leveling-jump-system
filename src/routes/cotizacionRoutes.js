@@ -10,8 +10,8 @@ const {
 } = require('../controllers/cotizacionController');
 const { verificarToken, requerirRol } = require('../middlewares/authMiddleware');
 
-// HU-07: Endpoint para generar una cotización formal (sin reservar stock)
-router.post('/cotizaciones', crearCotizacion);
+// HU-07: Endpoint autenticado para generar una cotización formal (vinculada a la cuenta real del usuario)
+router.post('/cotizaciones', verificarToken, crearCotizacion);
 
 // Endpoint protegido para que el cliente autenticado consulte todas sus cotizaciones
 router.get('/cotizaciones/mis-cotizaciones', verificarToken, obtenerMisCotizaciones);

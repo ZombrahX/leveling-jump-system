@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { reservaService } from '../services/reservaService';
+import { obtenerWhatsappTiendaDigits } from '../services/configuracionService';
 
 export default function CustomerReservations({ token, onExplorarCatalogo }) {
   const [reservas, setReservas] = useState([]);
@@ -33,7 +34,7 @@ export default function CustomerReservations({ token, onExplorarCatalogo }) {
     const text = encodeURIComponent(
       `¡Hola Leveling Jump! Deseo consultar el estado de mi reserva *${reserva.codigoSeguimiento}* para el producto *${reserva.producto?.nombre}*. Adelanto abonado: S/ ${Number(reserva.montoAdelanto).toFixed(2)}, saldo pendiente: S/ ${Number(reserva.saldoPendiente).toFixed(2)}.`
     );
-    return `https://wa.me/51999999999?text=${text}`;
+    return `https://wa.me/${obtenerWhatsappTiendaDigits()}?text=${text}`;
   };
 
   const getStatusBadge = (estado) => {

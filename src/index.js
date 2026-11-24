@@ -10,6 +10,7 @@ const reservaRoutes = require('./routes/reservaRoutes');
 const ventaRoutes = require('./routes/ventaRoutes');
 const cotizacionRoutes = require('./routes/cotizacionRoutes');
 const interesRoutes = require('./routes/interesRoutes');
+const configuracionRoutes = require('./routes/configuracionRoutes');
 
 const app = express();
 app.disable('x-powered-by');
@@ -54,6 +55,7 @@ app.use('/api', reservaRoutes);
 app.use('/api', ventaRoutes);
 app.use('/api', cotizacionRoutes);
 app.use('/api', interesRoutes);
+app.use('/api', configuracionRoutes);
 app.use('/api/auth', authRoutes);
 
 app.get('/', (req, res) => {

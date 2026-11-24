@@ -13,9 +13,13 @@ const handleResponse = async (res) => {
 export const interesService = {
   // Anotarse en lista de espera / notificar reposición
   async registrarInteres(payload) {
+    const token = localStorage.getItem('lj_auth_token');
     const res = await fetch(API_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      },
       body: JSON.stringify(payload)
     });
     return handleResponse(res);

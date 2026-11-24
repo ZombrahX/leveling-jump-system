@@ -192,7 +192,16 @@ const crearCotizacion = async (req, res) => {
   try {
     const { nombreCliente, telefonoCliente, emailCliente, items, observaciones, idUsuario } = req.body;
 
-    if (!nombreCliente || !nombreCliente.trim()) {
+    const esStaffOperador = req.usuario && ['SUPERADMIN', 'ADMIN'].includes(req.usuario.rol);
+    const idUsuarioFinal = req.usuario ? Number(req.usuario.id) : (idUsuario && Number.isInteger(Number(idUsuario)) ? Number(idUsuario) : null);
+    const nombreFinal = (!esStaffOperador && req.usuario?.nombre)
+      ? req.usuario.nombre.replace(/\s*\((Google|Local)\)/gi, '').trim()
+      : (nombreCliente ? nombreCliente.trim() : '');
+    const emailFinal = (!esStaffOperador && req.usuario?.email)
+      ? req.usuario.email.trim().toLowerCase()
+      : (emailCliente ? emailCliente.trim().toLowerCase() : null);
+
+    if (!nombreFinal) {
       return res.status(400).json({ error: 'El nombre del cliente es obligatorio para la cotización.' });
     }
 
@@ -324,7 +333,7 @@ const crearCotizacion = async (req, res) => {
     const fechaVencimiento = new Date();
     fechaVencimiento.setDate(fechaVencimiento.getDate() + 7);
 
-    const uidTag = idUsuario && Number.isInteger(Number(idUsuario)) ? `[UID:${Number(idUsuario)}]` : '';
+    const uidTag = idUsuarioFinal ? `[UID:${idUsuarioFinal}]` : '';
     const obsBase = observaciones ? observaciones.trim() : '';
     const observacionesFinal = [obsBase, uidTag].filter(Boolean).join(' ').trim() || null;
 
@@ -332,9 +341,9 @@ const crearCotizacion = async (req, res) => {
       const cot = await tx.cotizacion.create({
         data: {
           codigoCotizacion,
-          nombreCliente: nombreCliente.trim(),
+          nombreCliente: nombreFinal,
           telefonoCliente: telefonoCliente.trim(),
-          emailCliente: emailCliente ? emailCliente.trim() : null,
+          emailCliente: emailFinal,
           total: totalCotizacion,
           fechaVencimiento,
           observaciones: observacionesFinal,

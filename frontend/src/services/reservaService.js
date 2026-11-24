@@ -13,9 +13,13 @@ async function handleResponse(res) {
 export const reservaService = {
   // PTLJ-4 / HU-06: Registrar reserva individual
   async crearReserva(payload) {
+    const token = localStorage.getItem('lj_auth_token');
     const res = await fetch(API_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      },
       body: JSON.stringify(payload)
     });
     return handleResponse(res);

@@ -1,3 +1,5 @@
+import { obtenerWhatsappTiendaFormateado } from '../services/configuracionService';
+
 /**
  * Escapa caracteres especiales HTML para prevenir vulnerabilidades DOM / Stored XSS (CWE-79)
  */
@@ -176,7 +178,7 @@ export function imprimirProformaOficial(cotizacion) {
           <div class="brand">
             <h1>LEVELING JUMP</h1>
             <p>Tienda Oficial de Gunpla, Model Kits Bandai & Anime Collectibles</p>
-            <p>Lima, Perú · WhatsApp Comercial: +51 999 888 777</p>
+            <p>Lima, Perú · WhatsApp Comercial: ${escapeHtml(obtenerWhatsappTiendaFormateado())}</p>
           </div>
           <div class="doc-meta">
             <div class="code">${codigoSeguro}</div>

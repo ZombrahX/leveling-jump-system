@@ -85,11 +85,20 @@ const crearReserva = async (req, res) => {
       idUsuario
     } = req.body;
 
+    const esStaffOperador = req.usuario && ['SUPERADMIN', 'ADMIN'].includes(req.usuario.rol);
+    const idUsuarioFinal = req.usuario ? Number(req.usuario.id) : (idUsuario ? parseInt(idUsuario) : null);
+    const nombreFinal = (!esStaffOperador && req.usuario?.nombre)
+      ? req.usuario.nombre.replace(/\s*\((Google|Local)\)/gi, '').trim()
+      : (nombreCliente ? nombreCliente.trim() : '');
+    const emailFinal = (!esStaffOperador && req.usuario?.email)
+      ? req.usuario.email.trim().toLowerCase()
+      : (emailCliente ? emailCliente.trim().toLowerCase() : null);
+
     if (!idProducto) {
       return res.status(400).json({ error: 'El producto a reservar es obligatorio.' });
     }
 
-    if (!nombreCliente || !nombreCliente.trim()) {
+    if (!nombreFinal) {
       return res.status(400).json({ error: 'El nombre del cliente es obligatorio.' });
     }
 
@@ -160,10 +169,10 @@ const crearReserva = async (req, res) => {
           codigoSeguimiento,
           idProducto: parseInt(idProducto),
           idUnidad: unidadDisponible.id,
-          idUsuario: idUsuario ? parseInt(idUsuario) : null,
-          nombreCliente: nombreCliente.trim(),
+          idUsuario: idUsuarioFinal,
+          nombreCliente: nombreFinal,
           telefonoCliente: telefonoCliente.trim(),
-          emailCliente: emailCliente ? emailCliente.trim().toLowerCase() : null,
+          emailCliente: emailFinal,
           montoTotal: total,
           montoAdelanto: adelanto,
           saldoPendiente: saldo,
@@ -912,19 +921,26 @@ const crearReservasEnMasa = async (req, res) => {
   try {
     const { items, nombreCliente, telefonoCliente, emailCliente, notas, idUsuario: bodyIdUsuario } = req.body;
 
+    const esStaffOperador = req.usuario && ['SUPERADMIN', 'ADMIN'].includes(req.usuario.rol);
+    const idUsuario = req.usuario ? Number(req.usuario.id) : (bodyIdUsuario && Number.isInteger(Number(bodyIdUsuario)) ? Number(bodyIdUsuario) : null);
+    const nombreFinal = (!esStaffOperador && req.usuario?.nombre)
+      ? req.usuario.nombre.replace(/\s*\((Google|Local)\)/gi, '').trim()
+      : (nombreCliente ? nombreCliente.trim() : '');
+    const emailFinal = (!esStaffOperador && req.usuario?.email)
+      ? req.usuario.email.trim().toLowerCase()
+      : (emailCliente ? emailCliente.trim().toLowerCase() : null);
+
     if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: 'La lista de productos para reservar no puede estar vacía.' });
     }
 
-    if (!nombreCliente || !nombreCliente.trim()) {
+    if (!nombreFinal) {
       return res.status(400).json({ error: 'El nombre del cliente es obligatorio.' });
     }
 
     if (!telefonoCliente || !telefonoCliente.trim()) {
       return res.status(400).json({ error: 'El teléfono/WhatsApp es obligatorio.' });
     }
-
-    const idUsuario = req.usuario ? req.usuario.id : (bodyIdUsuario && Number.isInteger(Number(bodyIdUsuario)) ? Number(bodyIdUsuario) : null);
 
     const resultado = await prisma.$transaction(async (tx) => {
       const reservasCreadas = [];
@@ -1003,9 +1019,9 @@ const crearReservasEnMasa = async (req, res) => {
             idProducto: idProd,
             idUnidad: unidadDisponible.id,
             idUsuario,
-            nombreCliente: nombreCliente.trim(),
+            nombreCliente: nombreFinal,
             telefonoCliente: telefonoCliente.trim(),
-            emailCliente: emailCliente ? emailCliente.trim().toLowerCase() : null,
+            emailCliente: emailFinal,
             montoTotal: precio,
             montoAdelanto: adelanto,
             saldoPendiente: saldo,

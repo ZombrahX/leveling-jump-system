@@ -16,10 +16,12 @@ import CartAndQuotationModal from './components/CartAndQuotationModal';
 import CotizacionesList from './components/CotizacionesList';
 import InteresesList from './components/InteresesList';
 import WaitlistModal from './components/WaitlistModal';
+import StoreSettings from './components/StoreSettings';
 import { obtenerProductos, crearProducto, actualizarProducto } from './services/productService';
 import { registrarRecepcion } from './services/recepcionService';
 import { authService } from './services/authService';
 import { reservaPoliticaService } from './services/reservaPoliticaService';
+import { configuracionService } from './services/configuracionService';
 
 const emptyProduct = {
   codigo: '',
@@ -47,7 +49,7 @@ export default function App() {
     try {
       const guardada = localStorage.getItem('lj_vista_activa');
       if (guardada) {
-        const vistasStaff = ['productos', 'recepcion', 'ventas-pos', 'reservas', 'cotizaciones', 'intereses'];
+        const vistasStaff = ['productos', 'recepcion', 'ventas-pos', 'reservas', 'cotizaciones', 'intereses', 'configuracion'];
         const vistasAuth = ['rastrear-pedido', 'mis-reservas', 'mis-cotizaciones', 'perfil'];
         if (guardada === 'staff' && esSuperadmin) return 'staff';
         if (vistasStaff.includes(guardada) && esStaff) return guardada;
@@ -147,6 +149,7 @@ export default function App() {
 
   useEffect(() => {
     load();
+    configuracionService.obtener().catch(() => {});
   }, [load]);
 
   const handleLoginSuccess = (usuarioLogueado) => {
@@ -337,7 +340,7 @@ export default function App() {
             <div className="nav-dropdown-wrapper">
               <button
                 type="button"
-                className={`nav-bar-btn has-dropdown ${vista === 'catalogo' || vista === 'productos' ? 'active' : ''}`}
+                className={`nav-bar-btn has-dropdown ${vista === 'catalogo' || vista === 'productos' || vista === 'configuracion' ? 'active' : ''}`}
                 onClick={() => toggleDropdown('catalogo')}
               >
                 <span>📦</span> Catálogo & Tienda
@@ -363,6 +366,16 @@ export default function App() {
                     <div>
                       <strong>Gestión de Productos</strong>
                       <small>Catálogo maestro, edición, precios y márgenes</small>
+                    </div>
+                  </div>
+                  <div
+                    className={`nav-dropdown-item ${vista === 'configuracion' ? 'active' : ''}`}
+                    onClick={() => chooseView('configuracion')}
+                  >
+                    <span className="item-icon">⚙️</span>
+                    <div>
+                      <strong>Configuración de Tienda</strong>
+                      <small>Canal oficial de WhatsApp y parámetros generales</small>
                     </div>
                   </div>
                 </div>
@@ -631,6 +644,12 @@ export default function App() {
         </div>
       )}
 
+      {vista === 'configuracion' && esStaff && (
+        <div className="single-view">
+          <StoreSettings token={token} />
+        </div>
+      )}
+
       {vista === 'staff' && esSuperadmin && (
         <div className="single-view">
           <StaffManagement />
@@ -664,6 +683,10 @@ export default function App() {
         usuarioActual={usuario}
         productos={productos}
         initialMode={cartInitialMode}
+        onRequireLogin={() => {
+          setShowCartModal(false);
+          setShowLoginModal(true);
+        }}
         onReservaExitosa={() => {
           load();
           setMsg('¡Reserva confirmada con éxito desde el carrito!');
@@ -675,6 +698,10 @@ export default function App() {
         producto={productoWaitlist}
         usuarioActual={usuario}
         onClose={() => setProductoWaitlist(null)}
+        onRequireLogin={() => {
+          setProductoWaitlist(null);
+          setShowLoginModal(true);
+        }}
       />
     </main>
   );

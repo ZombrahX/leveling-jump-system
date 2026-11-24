@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { interesService } from '../services/interesService';
 
-export default function WaitlistModal({ isOpen, onClose, producto, usuarioActual }) {
+export default function WaitlistModal({ isOpen, onClose, producto, usuarioActual, onRequireLogin }) {
   const [nombre, setNombre] = useState(usuarioActual?.nombre || '');
   const [telefono, setTelefono] = useState(usuarioActual?.telefono || '');
   const [email, setEmail] = useState(usuarioActual?.email || '');
@@ -97,45 +97,66 @@ export default function WaitlistModal({ isOpen, onClose, producto, usuarioActual
         {error && <div className="alert err" style={{ marginBottom: '14px' }}>⚠️ {error}</div>}
         {exito && <div className="alert ok" style={{ marginBottom: '14px' }}>✅ {exito}</div>}
 
+        {!usuarioActual ? (
+          <div style={{
+            background: '#0D1117',
+            border: '1px solid var(--color-cyan)',
+            borderRadius: '10px',
+            padding: '18px',
+            textAlign: 'center'
+          }}>
+            <span style={{ fontSize: '30px', display: 'block', marginBottom: '6px' }}>🔐</span>
+            <h4 style={{ margin: '0 0 6px', color: '#FFFFFF', fontSize: '15px' }}>
+              Inicia sesión para anotarte en la lista de espera
+            </h4>
+            <p style={{ margin: '0 0 14px', fontSize: '12px', color: '#8B949E', lineHeight: 1.45 }}>
+              Tu solicitud quedará vinculada a tu cuenta para notificarte de inmediato cuando ingrese un nuevo lote de este modelo.
+            </p>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button type="button" className="secondary" onClick={onClose} style={{ flex: 1, padding: '10px' }}>
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="primary"
+                onClick={() => {
+                  if (onRequireLogin) onRequireLogin();
+                }}
+                style={{ flex: 2, padding: '10px', fontWeight: 'bold' }}
+              >
+                👤 Iniciar Sesión / Crear Cuenta
+              </button>
+            </div>
+          </div>
+        ) : (
         <form onSubmit={handleSubmit}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
-            <label style={{ margin: 0 }}>
-              Tu Nombre *
-              <input
-                type="text"
-                required
-                value={nombre}
-                onChange={e => setNombre(e.target.value)}
-                placeholder="Ingresa tu nombre completo"
-                style={{ marginTop: '4px' }}
-              />
-            </label>
-            <label style={{ margin: 0 }}>
-              WhatsApp *
-              <input
-                type="tel"
-                required
-                value={telefono}
-                onChange={e => setTelefono(e.target.value)}
-                placeholder="Ej: 999 888 777"
-                style={{ marginTop: '4px' }}
-              />
-            </label>
+          <div style={{
+            background: '#0D1117',
+            border: '1px solid #30363D',
+            borderRadius: '8px',
+            padding: '10px 12px',
+            marginBottom: '12px',
+            fontSize: '12px'
+          }}>
+            <span style={{ color: '#8B949E', display: 'block', fontSize: '10.5px' }}>Cuenta solicitante:</span>
+            <strong style={{ color: '#FFFFFF' }}>{(usuarioActual.nombre || '').replace(/\s*\((Google|Local)\)/gi, '').trim()}</strong>
+            <span style={{ color: 'var(--color-cyan)', marginLeft: '6px' }}>({usuarioActual.email})</span>
           </div>
 
           <label style={{ display: 'block', margin: '0 0 10px' }}>
-            Correo Electrónico (Opcional)
+            WhatsApp de Contacto *
             <input
-              type="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              placeholder="tu-correo@ejemplo.com"
+              type="tel"
+              required
+              value={telefono}
+              onChange={e => setTelefono(e.target.value)}
+              placeholder="Ej: 999 888 777"
               style={{ marginTop: '4px' }}
             />
           </label>
 
           <label style={{ display: 'block', margin: '0 0 16px' }}>
-            Notas adicionales (Opcional)
+            Notas adicionales
             <input
               type="text"
               value={notas}
@@ -165,6 +186,7 @@ export default function WaitlistModal({ isOpen, onClose, producto, usuarioActual
             </button>
           </div>
         </form>
+        )}
       </div>
     </div>
   );

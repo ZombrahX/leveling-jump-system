@@ -7,8 +7,8 @@ const {
 } = require('../controllers/interesController');
 const { verificarToken, requerirRol } = require('../middlewares/authMiddleware');
 
-// Endpoint público: Cliente se anota en lista de espera / notificarme (HU-08)
-router.post('/intereses', registrarInteres);
+// Endpoint autenticado: Cliente se anota en lista de espera / notificarme (HU-08)
+router.post('/intereses', verificarToken, registrarInteres);
 
 // Endpoint protegido para Staff: Consultar demanda y waitlist para reposición
 router.get('/intereses', verificarToken, requerirRol(['SUPERADMIN', 'ADMIN']), listarResumenIntereses);

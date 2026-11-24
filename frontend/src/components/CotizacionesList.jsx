@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { cotizacionService } from '../services/cotizacionService';
+import { obtenerWhatsappTiendaFormateado } from '../services/configuracionService';
 import { imprimirProformaOficial } from '../utils/printProforma';
 
 export default function CotizacionesList({ token }) {
@@ -639,7 +640,7 @@ export default function CotizacionesList({ token }) {
                 <div>
                   <h3 style={{ margin: 0, fontSize: '19px', fontWeight: '900', color: '#0F172A' }}>LEVELING JUMP</h3>
                   <p style={{ margin: '2px 0', fontSize: '11px', color: '#64748B' }}>Model Kits, Gunpla & Coleccionables</p>
-                  <p style={{ margin: 0, fontSize: '11px', color: '#64748B' }}>WhatsApp Oficial: +51 999 888 777</p>
+                  <p style={{ margin: 0, fontSize: '11px', color: '#64748B' }}>WhatsApp Oficial: {obtenerWhatsappTiendaFormateado()}</p>
                 </div>
                 <div style={{ textAlign: 'right' }}>
                   <h4 style={{ margin: '0 0 2px', fontSize: '16px', fontWeight: '900', color: '#4F46E5', fontFamily: 'monospace' }}>

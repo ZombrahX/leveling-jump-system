@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { cotizacionService } from '../services/cotizacionService';
 import { reservaService } from '../services/reservaService';
 import { obtenerProductos } from '../services/productService';
+import { obtenerWhatsappTiendaDigits, obtenerWhatsappTiendaFormateado } from '../services/configuracionService';
 import { imprimirProformaOficial } from '../utils/printProforma';
 
 export default function CartAndQuotationModal({
@@ -13,6 +14,7 @@ export default function CartAndQuotationModal({
   usuarioActual,
   productos = [],
   onReservaExitosa,
+  onRequireLogin,
   initialMode = 'reserva' // 'reserva' o 'cotizacion'
 }) {
   const [activeTab, setActiveTab] = useState('cart'); // 'cart', 'consultar', 'cotizacion_doc'
@@ -397,7 +399,7 @@ export default function CartAndQuotationModal({
     const text = encodeURIComponent(
       `¡Hola Leveling Jump! Acabo de registrar mi pedido de reserva para los siguientes kits:\n\n${listaProds}\n\n*Códigos de Seguimiento:* ${codigos}\n*Adelanto Total:* S/ ${adelantoNum.toFixed(2)}\n*Saldo Pendiente:* S/ ${saldoPendiente.toFixed(2)}.`
     );
-    return `https://wa.me/51999999999?text=${text}`;
+    return `https://wa.me/${obtenerWhatsappTiendaDigits()}?text=${text}`;
   };
 
   const handleCompartirWhatsAppCotizacion = () => {
@@ -405,7 +407,7 @@ export default function CartAndQuotationModal({
     const msg = encodeURIComponent(
       `¡Hola Leveling Jump! Solicito confirmar mi cotización oficial *${cotizacionGenerada.codigoCotizacion}* por un total de *S/ ${parseFloat(cotizacionGenerada.total).toFixed(2)}* emitida a nombre de ${cotizacionGenerada.nombreCliente}.`
     );
-    window.open(`https://wa.me/51999999999?text=${msg}`, '_blank', 'noopener,noreferrer');
+    window.open(`https://wa.me/${obtenerWhatsappTiendaDigits()}?text=${msg}`, '_blank', 'noopener,noreferrer');
   };
 
   return (
@@ -728,6 +730,44 @@ export default function CartAndQuotationModal({
                   </button>
                 </div>
 
+                {/* Si el visitante NO ha iniciado sesión, exigir login antes de confirmar para evitar inyección/enumeración */}
+                {!usuarioActual ? (
+                  <div style={{
+                    background: '#0D1117',
+                    border: '1px solid var(--color-cyan)',
+                    borderRadius: '10px',
+                    padding: '20px',
+                    textAlign: 'center',
+                    marginTop: '12px'
+                  }}>
+                    <span style={{ fontSize: '34px', display: 'block', marginBottom: '8px' }}>🔐</span>
+                    <h4 style={{ margin: '0 0 8px', color: '#FFFFFF', fontSize: '16px' }}>
+                      Inicia sesión para confirmar tu {modoConfirmacion === 'reserva' ? 'reserva' : 'cotización'}
+                    </h4>
+                    <p style={{ margin: '0 0 16px', fontSize: '12.5px', color: '#8B949E', lineHeight: 1.5 }}>
+                      Para vincular este pedido de forma segura a tu historial y evitar el uso no autorizado de correos de terceros, inicia sesión o crea tu cuenta. Tus kits seleccionados en el carrito se mantendrán intactos.
+                    </p>
+                    <button
+                      type="button"
+                      className="primary"
+                      onClick={() => {
+                        if (onRequireLogin) onRequireLogin();
+                      }}
+                      style={{
+                        width: '100%',
+                        padding: '12px',
+                        fontSize: '14px',
+                        fontWeight: 'bold',
+                        background: 'var(--color-cyan)',
+                        color: '#080B0F',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      👤 Iniciar Sesión / Crear Cuenta Ahora
+                    </button>
+                  </div>
+                ) : (
+                  <>
                 {/* MODO A: CONFIRMAR COMO RESERVA (CON ADELANTO) */}
                 {modoConfirmacion === 'reserva' && (
                   <form onSubmit={handleConfirmarReserva} style={{ borderTop: '1px solid #30363D', paddingTop: '14px' }}>
@@ -770,22 +810,34 @@ export default function CartAndQuotationModal({
                       </div>
                     )}
 
-                    {/* Datos del Cliente */}
-                    {(!esStaff || reservarParaCliente) && (
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '10px', marginBottom: '10px' }}>
-                        <label style={{ margin: 0 }}>
-                          Tu Nombre Completo *
-                          <input
-                            type="text"
-                            required
-                            value={nombre}
-                            onChange={e => setNombre(e.target.value)}
-                            placeholder="Ingresa tu nombre completo"
-                            style={{ marginTop: '4px' }}
-                          />
-                        </label>
-                        <label style={{ margin: 0 }}>
-                          Teléfono / WhatsApp *
+                    {/* Si es Cliente autenticado (o Staff en auto-reserva), mostrar tarjeta de cuenta verificada */}
+                    {(!esStaff || !reservarParaCliente) ? (
+                      <div style={{ marginBottom: '12px' }}>
+                        <div style={{
+                          background: '#0D1117',
+                          border: '1px solid #30363D',
+                          borderRadius: '8px',
+                          padding: '10px 14px',
+                          marginBottom: '10px',
+                          fontSize: '12.5px',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          flexWrap: 'wrap',
+                          gap: '8px'
+                        }}>
+                          <div>
+                            <span style={{ color: '#8B949E', display: 'block', fontSize: '11px' }}>Titular de la cuenta autenticada:</span>
+                            <strong style={{ color: '#FFFFFF' }}>{(usuarioActual.nombre || '').replace(/\s*\((Google|Local)\)/gi, '').trim()}</strong>
+                            <span style={{ color: 'var(--color-cyan)', marginLeft: '8px', fontSize: '12px' }}>({usuarioActual.email})</span>
+                          </div>
+                          <span style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#10B981', padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 700 }}>
+                            ✓ Cuenta verificada
+                          </span>
+                        </div>
+
+                        <label style={{ display: 'block', margin: 0 }}>
+                          Teléfono / WhatsApp de Contacto *
                           <input
                             type="tel"
                             required
@@ -796,19 +848,43 @@ export default function CartAndQuotationModal({
                           />
                         </label>
                       </div>
-                    )}
-
-                    {(!esStaff || reservarParaCliente) && (
-                      <label style={{ display: 'block', margin: '0 0 10px' }}>
-                        Correo Electrónico (Opcional)
-                        <input
-                          type="email"
-                          value={email}
-                          onChange={e => setEmail(e.target.value)}
-                          placeholder="cliente@ejemplo.com"
-                          style={{ marginTop: '4px' }}
-                        />
-                      </label>
+                    ) : (
+                      <>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '10px', marginBottom: '10px' }}>
+                          <label style={{ margin: 0 }}>
+                            Nombre del Cliente *
+                            <input
+                              type="text"
+                              required
+                              value={nombre}
+                              onChange={e => setNombre(e.target.value)}
+                              placeholder="Ingresa el nombre completo"
+                              style={{ marginTop: '4px' }}
+                            />
+                          </label>
+                          <label style={{ margin: 0 }}>
+                            Teléfono / WhatsApp *
+                            <input
+                              type="tel"
+                              required
+                              value={telefono}
+                              onChange={e => setTelefono(e.target.value)}
+                              placeholder="Ej: 999 888 777"
+                              style={{ marginTop: '4px' }}
+                            />
+                          </label>
+                        </div>
+                        <label style={{ display: 'block', margin: '0 0 10px' }}>
+                          Correo Electrónico del Cliente
+                          <input
+                            type="email"
+                            value={email}
+                            onChange={e => setEmail(e.target.value)}
+                            placeholder="cliente@ejemplo.com"
+                            style={{ marginTop: '4px' }}
+                          />
+                        </label>
+                      </>
                     )}
 
                     {/* Cajón de Adelanto y Políticas */}
@@ -901,41 +977,82 @@ export default function CartAndQuotationModal({
                       ℹ️ La cotización formal verifica stock activo antes de emitirse y congela precios durante 7 días. No compromete inventario físico.
                     </p>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '10px', marginBottom: '10px' }}>
-                      <label style={{ margin: 0 }}>
-                        Tu Nombre Completo *
-                        <input
-                          type="text"
-                          required
-                          value={nombre}
-                          onChange={e => setNombre(e.target.value)}
-                          placeholder="Ej: César Sánchez"
-                          style={{ marginTop: '4px' }}
-                        />
-                      </label>
-                      <label style={{ margin: 0 }}>
-                        Teléfono / WhatsApp *
-                        <input
-                          type="tel"
-                          required
-                          value={telefono}
-                          onChange={e => setTelefono(e.target.value)}
-                          placeholder="Ej: 999 888 777"
-                          style={{ marginTop: '4px' }}
-                        />
-                      </label>
-                    </div>
+                    {(!esStaff || !reservarParaCliente) ? (
+                      <div style={{ marginBottom: '12px' }}>
+                        <div style={{
+                          background: '#0D1117',
+                          border: '1px solid #30363D',
+                          borderRadius: '8px',
+                          padding: '10px 14px',
+                          marginBottom: '10px',
+                          fontSize: '12.5px',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          flexWrap: 'wrap',
+                          gap: '8px'
+                        }}>
+                          <div>
+                            <span style={{ color: '#8B949E', display: 'block', fontSize: '11px' }}>Cotización vinculada a tu cuenta:</span>
+                            <strong style={{ color: '#FFFFFF' }}>{(usuarioActual.nombre || '').replace(/\s*\((Google|Local)\)/gi, '').trim()}</strong>
+                            <span style={{ color: 'var(--color-cyan)', marginLeft: '8px', fontSize: '12px' }}>({usuarioActual.email})</span>
+                          </div>
+                          <span style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#10B981', padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 700 }}>
+                            ✓ Cuenta verificada
+                          </span>
+                        </div>
 
-                    <label style={{ display: 'block', margin: '0 0 10px' }}>
-                      Correo Electrónico (Opcional)
-                      <input
-                        type="email"
-                        value={email}
-                        onChange={e => setEmail(e.target.value)}
-                        placeholder="tu-correo@ejemplo.com"
-                        style={{ marginTop: '4px' }}
-                      />
-                    </label>
+                        <label style={{ display: 'block', margin: 0 }}>
+                          Teléfono / WhatsApp de Contacto *
+                          <input
+                            type="tel"
+                            required
+                            value={telefono}
+                            onChange={e => setTelefono(e.target.value)}
+                            placeholder="Ej: 999 888 777"
+                            style={{ marginTop: '4px' }}
+                          />
+                        </label>
+                      </div>
+                    ) : (
+                      <>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '10px', marginBottom: '10px' }}>
+                          <label style={{ margin: 0 }}>
+                            Nombre del Cliente *
+                            <input
+                              type="text"
+                              required
+                              value={nombre}
+                              onChange={e => setNombre(e.target.value)}
+                              placeholder="Ingresa el nombre completo"
+                              style={{ marginTop: '4px' }}
+                            />
+                          </label>
+                          <label style={{ margin: 0 }}>
+                            Teléfono / WhatsApp *
+                            <input
+                              type="tel"
+                              required
+                              value={telefono}
+                              onChange={e => setTelefono(e.target.value)}
+                              placeholder="Ej: 999 888 777"
+                              style={{ marginTop: '4px' }}
+                            />
+                          </label>
+                        </div>
+
+                        <label style={{ display: 'block', margin: '0 0 10px' }}>
+                          Correo Electrónico
+                          <input
+                            type="email"
+                            value={email}
+                            onChange={e => setEmail(e.target.value)}
+                            placeholder="tu-correo@ejemplo.com"
+                            style={{ marginTop: '4px' }}
+                          />
+                        </label>
+                      </>
+                    )}
 
                     <label style={{ display: 'block', margin: '0 0 16px' }}>
                       Notas o Consultas Adicionales
@@ -969,6 +1086,8 @@ export default function CartAndQuotationModal({
                     </button>
                   </form>
                 )}
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -999,7 +1118,7 @@ export default function CartAndQuotationModal({
                     Model Kits, Gunpla & Coleccionables de Importación
                   </p>
                   <p style={{ margin: 0, fontSize: '11px', color: '#64748B' }}>
-                    Lima, Perú | WhatsApp: +51 999 888 777
+                    Lima, Perú | WhatsApp: {obtenerWhatsappTiendaFormateado()}
                   </p>
                 </div>
                 <div style={{ textAlign: 'right' }}>

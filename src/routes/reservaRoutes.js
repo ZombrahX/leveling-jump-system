@@ -13,11 +13,11 @@ const {
 } = require('../controllers/reservaController');
 const { verificarToken, requerirRol } = require('../middlewares/authMiddleware');
 
-// Endpoint público para que clientes reserven una unidad desde el catálogo (HU-06)
-router.post('/reservas', crearReserva);
+// Endpoint protegido para que usuarios autenticados reserven una unidad desde el catálogo (HU-06)
+router.post('/reservas', verificarToken, crearReserva);
 
-// HU-02 & HU-06: Endpoint atómico para reservas múltiples desde carrito (evita confirmaciones parciales)
-router.post('/reservas/en-masa', crearReservasEnMasa);
+// HU-02 & HU-06: Endpoint atómico autenticado para reservas múltiples desde carrito (evita confirmaciones parciales e inyección de cuentas)
+router.post('/reservas/en-masa', verificarToken, crearReservasEnMasa);
 
 // HU-10: Endpoint público para rastrear el pedido por código correlativo (Escenario 1 y 2)
 router.get('/reservas/seguimiento/:codigo', consultarSeguimientoPublico);

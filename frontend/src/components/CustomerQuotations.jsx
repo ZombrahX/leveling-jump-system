@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { cotizacionService } from '../services/cotizacionService';
+import { obtenerWhatsappTiendaDigits, obtenerWhatsappTiendaFormateado } from '../services/configuracionService';
 import { imprimirProformaOficial } from '../utils/printProforma';
 
 export default function CustomerQuotations({ token, usuarioActual, onExplorarCatalogo }) {
@@ -80,7 +81,7 @@ export default function CustomerQuotations({ token, usuarioActual, onExplorarCat
     const msg = encodeURIComponent(
       `¡Hola Leveling Jump! Solicito confirmar mi cotización oficial *${cot.codigoCotizacion}* por un total de *S/ ${parseFloat(cot.total || 0).toFixed(2)}* emitida a nombre de ${cot.nombreCliente}.`
     );
-    window.open(`https://wa.me/51999999999?text=${msg}`, '_blank', 'noopener,noreferrer');
+    window.open(`https://wa.me/${obtenerWhatsappTiendaDigits()}?text=${msg}`, '_blank', 'noopener,noreferrer');
   };
 
   const handleConfirmarORecalcular = async (cot, accion = 'confirmar') => {
@@ -606,7 +607,7 @@ export default function CustomerQuotations({ token, usuarioActual, onExplorarCat
                 <div>
                   <h3 style={{ margin: 0, fontSize: '19px', fontWeight: '900', color: '#0F172A' }}>LEVELING JUMP</h3>
                   <p style={{ margin: '2px 0', fontSize: '11px', color: '#64748B' }}>Model Kits, Gunpla & Coleccionables</p>
-                  <p style={{ margin: 0, fontSize: '11px', color: '#64748B' }}>Lima, Perú | WhatsApp Oficial: +51 999 888 777</p>
+                  <p style={{ margin: 0, fontSize: '11px', color: '#64748B' }}>Lima, Perú | WhatsApp Oficial: {obtenerWhatsappTiendaFormateado()}</p>
                 </div>
                 <div style={{ textAlign: 'right' }}>
                   <h4 style={{ margin: '0 0 2px', fontSize: '16px', fontWeight: '900', color: '#4F46E5', fontFamily: 'monospace' }}>

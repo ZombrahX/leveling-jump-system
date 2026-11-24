@@ -7,9 +7,13 @@ export const cotizacionService = {
    * HU-07: Crear una nueva cotización formal (válida por 7 días)
    */
   async crearCotizacion(datos) {
+    const token = localStorage.getItem('lj_auth_token');
     const res = await fetch(BASE_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      },
       body: JSON.stringify(datos)
     });
     const data = await res.json();

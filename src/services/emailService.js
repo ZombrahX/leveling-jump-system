@@ -2,14 +2,29 @@ require('dotenv').config();
 const nodemailer = require('nodemailer');
 
 /**
- * Escapa caracteres HTML básicos para prevenir inyección de marcado en correos.
+ * Escapa caracteres HTML y elimina saltos de línea para prevenir inyección de marcado o cabeceras en correos.
  */
 function escapeHtml(value) {
   return String(value ?? '')
+    .replace(/[\r\n]+/g, ' ')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/**
+ * Sanitiza el nombre del destinatario contra Content Spoofing / Phishing (elimina URLs, etiquetas y saltos de línea).
+ */
+function sanitizeRecipientName(name, fallback = 'coleccionista') {
+  const clean = String(name ?? '')
+    .replace(/[\r\n<>]+/g, ' ')
+    .replace(/https?:\/\/\S+/gi, '')
+    .replace(/www\.\S+/gi, '')
+    .trim()
+    .slice(0, 80);
+  return clean || fallback;
 }
 
 /**
@@ -180,12 +195,13 @@ async function sendTransactionalEmail({ to, toName, fromLabel, subject, text, ht
  * Envía un correo con el código OTP de verificación de 6 dígitos (versión texto + HTML).
  */
 async function enviarCodigoVerificacion(destinatario, nombre, codigo) {
-  const safeName = escapeHtml(nombre || 'coleccionista');
+  const cleanName = sanitizeRecipientName(nombre, 'coleccionista');
+  const safeName = escapeHtml(cleanName);
   const safeCode = escapeHtml(codigo);
-  const subject = `Tu código de verificación: ${codigo} — Leveling Jump`;
+  const subject = `Tu código de verificación: ${safeCode} — Leveling Jump`;
 
   const text = [
-    `Hola ${nombre || 'coleccionista'},`,
+    `Hola ${cleanName},`,
     '',
     `Tu código de verificación de Leveling Jump es: ${codigo}`,
     '',
@@ -227,7 +243,7 @@ async function enviarCodigoVerificacion(destinatario, nombre, codigo) {
 
   return sendTransactionalEmail({
     to: destinatario,
-    toName: nombre,
+    toName: cleanName,
     fromLabel: 'Leveling Jump',
     subject,
     text,
@@ -240,17 +256,18 @@ async function enviarCodigoVerificacion(destinatario, nombre, codigo) {
  * Envía un correo con el comprobante de reserva de unidad.
  */
 async function enviarComprobanteReserva(destinatario, nombre, reserva) {
-  const safeName = escapeHtml(nombre || 'cliente');
+  const cleanName = sanitizeRecipientName(nombre, 'cliente');
+  const safeName = escapeHtml(cleanName);
   const safeCodigo = escapeHtml(reserva.codigoSeguimiento);
   const safeProd = escapeHtml(reserva.nombreProducto);
   const total = Number(reserva.montoTotal).toFixed(2);
   const adelanto = Number(reserva.montoAdelanto).toFixed(2);
   const saldo = Number(reserva.saldoPendiente).toFixed(2);
 
-  const subject = `Reserva Confirmada [${reserva.codigoSeguimiento}] — Leveling Jump`;
+  const subject = `Reserva Confirmada [${safeCodigo}] — Leveling Jump`;
 
   const text = [
-    `Hola ${nombre || 'cliente'},`,
+    `Hola ${cleanName},`,
     '',
     `Tu reserva en Leveling Jump ha sido registrada con éxito.`,
     `Código de Seguimiento: ${reserva.codigoSeguimiento}`,

@@ -17,9 +17,7 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }) {
   // Client ID oficial de Google Cloud OAuth
   const OFFICIAL_GOOGLE_CLIENT_ID = '784626326160-u2cbelakbsulgog482jcjlrpb13dc38l.apps.googleusercontent.com';
   const envClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || OFFICIAL_GOOGLE_CLIENT_ID;
-  const [inputClientId, setInputClientId] = useState(() => {
-    return localStorage.getItem('lj_custom_google_client_id') || envClientId;
-  });
+  const [inputClientId, setInputClientId] = useState(envClientId);
 
   const hasValidClientId = !!inputClientId && inputClientId.includes('.apps.googleusercontent.com');
 

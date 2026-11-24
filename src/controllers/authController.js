@@ -82,6 +82,11 @@ const registro = async (req, res) => {
       return res.status(400).json({ error: 'Nombre, correo electrónico y contraseña son obligatorios.' });
     }
 
+    const nombreLimpio = String(nombre).replace(/[\r\n<>]+/g, ' ').trim();
+    if (nombreLimpio.length < 2 || nombreLimpio.length > 80 || /https?:\/\/|www\./i.test(nombreLimpio)) {
+      return res.status(400).json({ error: 'El nombre ingresado no es válido (debe tener entre 2 y 80 caracteres y no contener enlaces web).' });
+    }
+
     if (password.length < 6) {
       return res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres.' });
     }
@@ -297,14 +302,14 @@ const login = async (req, res) => {
       where: { email: emailNormalizado }
     });
 
-    // Rechazar credenciales inválidas sin revelar si el correo existe (Criterio Jira & OWASP)
-    if (!usuario || !usuario.activo) {
-      return res.status(401).json({ error: 'Credenciales inválidas. Verifica tu correo y contraseña.' });
-    }
+    // Hash dummy para mantener tiempo constante y evitar enumeración de usuarios/proveedores (CWE-204 / CWE-208)
+    const DUMMY_BCRYPT_HASH = '$2b$10$CwTycUXWue0Thq9StjUM0uJ8p4K1.F8H0v7G6W5L2M3N4O5P6Q7R8';
 
-    if (!usuario.passwordHash) {
-      return res.status(400).json({ 
-        error: 'Esta cuenta fue creada mediante Google. Por favor, inicia sesión con Google.' 
+    // Rechazar credenciales inválidas sin revelar si el correo existe o qué proveedor usa
+    if (!usuario || !usuario.activo || !usuario.passwordHash) {
+      await bcrypt.compare(password, DUMMY_BCRYPT_HASH).catch(() => {});
+      return res.status(401).json({
+        error: 'Credenciales inválidas. Verifica tu correo y contraseña (o inicia sesión con Google si registraste tu cuenta por ese medio).'
       });
     }
 
@@ -356,54 +361,44 @@ const login = async (req, res) => {
 };
 
 /**
- * PTLJ-43 / HU-11: Inicio de sesión con Google (OAuth 2.0 verificado en servidor)
+ * PTLJ-43 / HU-11: Inicio de sesión con Google (OAuth 2.0 verificado obligatoriamente en servidor)
  */
 const loginGoogle = async (req, res) => {
   try {
-    const { email, nombre, accessToken } = req.body;
+    const { accessToken } = req.body;
 
-    let emailVerificadoGoogle = email ? email.trim().toLowerCase() : '';
-    let nombreVerificadoGoogle = nombre ? nombre.trim() : '';
-    let tokenVerificadoServidor = false;
+    if (!accessToken || typeof accessToken !== 'string') {
+      return res.status(401).json({
+        error: 'Se requiere un token OAuth 2.0 válido de Google para iniciar sesión.'
+      });
+    }
 
-    // 1. Si el frontend envía el access_token de Google Identity Services, validarlo criptográficamente contra Google UserInfo API
-    if (accessToken && typeof accessToken === 'string') {
-      try {
-        const googleRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-          headers: { Authorization: `Bearer ${accessToken}` }
-        });
-        if (!googleRes.ok) {
-          return res.status(401).json({ error: 'Token de acceso de Google inválido o expirado.' });
-        }
-        const googleUser = await googleRes.json();
-        if (!googleUser || !googleUser.email) {
-          return res.status(401).json({ error: 'Google no devolvió una identidad válida.' });
-        }
-        emailVerificadoGoogle = googleUser.email.trim().toLowerCase();
-        nombreVerificadoGoogle = (googleUser.name || nombreVerificadoGoogle || emailVerificadoGoogle.split('@')[0]).trim();
-        tokenVerificadoServidor = true;
-      } catch (err) {
-        return res.status(401).json({ error: 'No se pudo validar el token con los servidores de Google.' });
+    let googleUser = null;
+    try {
+      const googleRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+      if (!googleRes.ok) {
+        return res.status(401).json({ error: 'Token de acceso de Google inválido o expirado.' });
       }
+      googleUser = await googleRes.json();
+    } catch (err) {
+      return res.status(401).json({ error: 'No se pudo validar el token con los servidores de Google.' });
     }
 
-    if (!emailVerificadoGoogle) {
-      return res.status(400).json({ error: 'El correo de Google es obligatorio.' });
+    if (!googleUser || !googleUser.email || googleUser.email_verified === false) {
+      return res.status(401).json({ error: 'Google no devolvió una identidad con correo verificado.' });
     }
+
+    const emailVerificadoGoogle = googleUser.email.trim().toLowerCase();
+    const nombreVerificadoGoogle = String(googleUser.name || emailVerificadoGoogle.split('@')[0])
+      .replace(/[\r\n<>]+/g, ' ')
+      .trim()
+      .slice(0, 80);
 
     let usuario = await prisma.usuario.findUnique({
       where: { email: emailVerificadoGoogle }
     });
-
-    // 2. Protección contra Account Takeover (CWE-287):
-    // Si la petición no trae un accessToken verificado por Google, impedir el acceso a cuentas de Staff o cuentas con contraseña local
-    if (usuario && !tokenVerificadoServidor) {
-      if (usuario.rol === 'SUPERADMIN' || usuario.rol === 'ADMIN' || usuario.passwordHash) {
-        return res.status(401).json({
-          error: 'Verificación de seguridad requerida: Inicia sesión con tu contraseña o mediante la ventana oficial de Google.'
-        });
-      }
-    }
 
     if (usuario && !usuario.activo) {
       return res.status(403).json({ error: 'Tu cuenta se encuentra desactivada.' });
@@ -411,7 +406,7 @@ const loginGoogle = async (req, res) => {
 
     if (!usuario) {
       const total = await prisma.usuario.count();
-      const rol = (tokenVerificadoServidor && (emailVerificadoGoogle === CORREO_SUPERADMIN_OFICIAL || total === 0))
+      const rol = (emailVerificadoGoogle === CORREO_SUPERADMIN_OFICIAL || total === 0)
         ? 'SUPERADMIN'
         : 'CLIENTE';
 
@@ -425,10 +420,15 @@ const loginGoogle = async (req, res) => {
           permisosModulos: rol === 'SUPERADMIN' ? ['PRODUCTOS', 'LOTES', 'RESERVAS', 'USUARIOS'] : null
         }
       });
-    } else if (!usuario.emailVerificado && tokenVerificadoServidor) {
+    } else if (!usuario.emailVerificado || usuario.codigoVerificacion) {
+      // Account Linking seguro: al demostrar posesión del correo vía Google, limpiar cualquier OTP pendiente
       usuario = await prisma.usuario.update({
         where: { id: usuario.id },
-        data: { emailVerificado: true }
+        data: {
+          emailVerificado: true,
+          codigoVerificacion: null,
+          expiracionCodigo: null
+        }
       });
     }
 

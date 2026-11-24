@@ -245,31 +245,8 @@ export default function App() {
           </div>
         </div>
 
-        {/* Sección de autenticación, perfil y acceso al carrito */}
+        {/* Sección de autenticación y perfil */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-          {carrito.length > 0 && (
-            <button
-              type="button"
-              className="secondary"
-              onClick={() => {
-                setCartInitialMode('reserva');
-                setShowCartModal(true);
-              }}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '8px 14px',
-                borderColor: 'var(--color-cyan)',
-                color: 'var(--color-cyan)',
-                background: 'rgba(0, 210, 238, 0.08)',
-                cursor: 'pointer'
-              }}
-            >
-              <span>🛒</span> Carrito ({carrito.reduce((a, b) => a + (b.cantidad || 1), 0)})
-            </button>
-          )}
-
           {usuario ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', background: '#161B22', padding: '8px 14px', borderRadius: '8px', border: '1px solid #30363D' }}>
               <div>
@@ -347,16 +324,6 @@ export default function App() {
               onClick={() => chooseView('catalogo')}
             >
               <span>🛍️</span> Catálogo Comercial
-            </button>
-            <button
-              className="nav-bar-btn"
-              onClick={() => {
-                setCartInitialMode('reserva');
-                setShowCartModal(true);
-              }}
-              title="Carrito de compras, reservas y cotizaciones"
-            >
-              <span>🛒</span> Carrito {carrito.length > 0 && `(${carrito.reduce((a, b) => a + (b.cantidad || 1), 0)})`}
             </button>
             {usuario && (
               <>
